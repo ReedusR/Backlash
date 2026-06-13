@@ -1,0 +1,11 @@
+NAME=Forest
+COLOR_DEPTH=4
+desktop_idx_4=2
+taskbar_idx_4=7
+select_idx_4=2
+text_idx_4=0
+textinv_idx_4=15
+control_bg_idx_4=7
+bevel_hi_idx_4=15
+bevel_lo_idx_4=8
+missing_idx_4=12

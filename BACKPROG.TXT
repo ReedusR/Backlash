@@ -1,0 +1,1157 @@
+Backlash App Programming Cheat Sheet
+
+This text covers the basic Backlash app format, common controls, event blocks, host commands, SYS action files, and practical examples.
+
+FILE TYPES
+
+.APP
+- Main app layout file.
+- Defines the window, controls, buttons, key actions, and events.
+
+.SYS
+- App script file.
+- Usually holds reusable action blocks called by SYS_ACTION.
+
+.CFG
+- App settings file.
+- Used by bound controls such as textboxes, checkboxes, tabs, and combos.
+
+.BAS / .EXE
+- Optional helper program source and compiled helper.
+- Use helpers for real file scanning, image processing, sound work, reports, or other heavy work.
+
+
+BASIC APP HEADER
+
+Common keys:
+
+title=App Title
+ui=LAYOUT
+single_instance=0
+resizable=0
+no_scrollbars=1
+SESSION_STATE=GENERIC
+KEY_ACTION=SYS_ACTION APPFILE.SYS SECTION
+
+Example:
+
+title=Cleaner
+ui=LAYOUT
+single_instance=1
+resizable=0
+no_scrollbars=1
+SESSION_STATE=GENERIC
+
+Rules:
+- Use ui=LAYOUT for normal Backlash apps.
+- Use single_instance=1 when only one copy of the app should be open.
+- Use resizable=1 only when the layout actually supports growing/moving controls.
+- Use no_scrollbars=1 only when every control fits and the window does not need content scrolling.
+- Use SESSION_STATE=GENERIC when the app should remember normal window/session state.
+
+
+WINDOW SECTION
+
+Syntax:
+
+[WINDOW]
+X=150
+Y=80
+W=560
+H=411
+
+Example:
+
+[WINDOW]
+X=120
+Y=70
+W=320
+H=284
+
+Notes:
+- X and Y are the starting window position.
+- W and H are the window size.
+- Leave 15 pixels below the lowest button unless the app has a specific reason not to.
+
+
+LABEL
+
+Syntax:
+
+[LABEL]
+NAME=TITLE_LABEL
+TEXT=Cleaner
+X=16
+Y=14
+W=160
+H=16
+
+Common keys:
+- NAME: optional control name.
+- TEXT: text shown on screen.
+- X, Y, W, H: position and size.
+- PAGE: tab/page name if the label belongs to a tab.
+- MOVE_X, MOVE_Y, GROW_W, GROW_H: resize behavior.
+
+Example:
+
+[LABEL]
+TEXT=Launch
+X=310
+Y=14
+W=54
+H=16
+
+
+BUTTON
+
+Syntax:
+
+[BUTTON]
+NAME=SAVE_BTN
+TEXT=Save
+X=440
+Y=350
+W=72
+H=24
+ACTION=SYS_ACTION APP.SYS SAVE
+
+Common keys:
+- NAME: optional control name.
+- TEXT: button caption.
+- ACTION: command to run when clicked.
+- X, Y, W, H: position and size.
+- PAGE: tab/page name if the button belongs to a tab.
+
+Examples:
+
+[BUTTON]
+TEXT=Close
+X=472
+Y=351
+W=72
+H=24
+ACTION=CLOSE_WINDOW
+
+[BUTTON]
+TEXT=Apply
+X=360
+Y=350
+W=72
+H=24
+ACTION=APPLY_BINDINGS
+
+[BUTTON]
+TEXT=Scan Only
+X=224
+Y=351
+W=92
+H=24
+ACTION=SCAN_ONLY
+
+
+TEXTBOX
+
+Syntax:
+
+[TEXTBOX]
+NAME=STATUS
+TEXT=Ready.
+X=96
+Y=10
+W=448
+H=22
+READONLY=1
+
+Common keys:
+- NAME: required if another command needs to read/write this control.
+- TEXT: starting text.
+- READONLY=1: user cannot edit the field.
+- WORD_WRAP=1: wrap long lines in multiline fields.
+- MAXLEN: maximum text length.
+- BIND_FILE: config file to load/save from.
+- BIND_SECTION: config section.
+- BIND_KEY: config key.
+- MOVE_X, MOVE_Y, GROW_W, GROW_H: resize behavior.
+
+Examples:
+
+[TEXTBOX]
+NAME=PATH_BOX
+TEXT=C:\
+X=16
+Y=20
+W=300
+H=22
+BIND_FILE=SYSTEM\RUN.CFG
+BIND_KEY=last_path
+
+[TEXTBOX]
+NAME=REPORT_FILE
+TEXT=SYSTEM\TEMP\REPORT.TXT
+X=0
+Y=0
+W=1
+H=1
+READONLY=1
+
+
+CHECKBOX
+
+Syntax:
+
+[CHECKBOX]
+NAME=DEL_TMP
+TEXT=Delete Temp Files (*.TMP)
+X=24
+Y=48
+W=300
+H=16
+BIND_FILE=CLEANER.CFG
+BIND_KEY=del_temp
+BIND_VALUE=1
+STATE=0
+
+Common keys:
+- STATE=0 or STATE=1 sets the starting value.
+- BIND_FILE and BIND_KEY save the setting.
+- BIND_VALUE is the value written when checked.
+
+Example:
+
+[CHECKBOX]
+NAME=ENABLE_SOUND
+TEXT=Enable Sound
+X=24
+Y=48
+W=160
+H=16
+BIND_FILE=SYSTEM\SOUND.CFG
+BIND_KEY=enabled
+BIND_VALUE=1
+STATE=1
+
+
+RADIO
+
+Syntax:
+
+[RADIO]
+NAME=MODE_TILE
+TEXT=Tile
+X=24
+Y=60
+W=90
+H=16
+BIND_FILE=SYSTEM\WALLPAPR.CFG
+BIND_KEY=mode
+BIND_VALUE=TILE
+STATE=0
+
+Notes:
+- Radio buttons sharing the same BIND_FILE and BIND_KEY behave as a group.
+- BIND_VALUE is written when that radio button is selected.
+
+
+TAB
+
+Syntax:
+
+[TAB]
+TEXT=Basic
+X=12
+Y=52
+W=80
+H=22
+BIND_FILE=CALC.APP
+BIND_KEY=mode
+BIND_VALUE=BASIC
+ACTION=SYS_ACTION CALC.SYS BASIC_MODE
+
+Notes:
+- Tabs are commonly backed by a bound key.
+- Controls can use PAGE=... to appear only on a matching page.
+
+
+COMBO
+
+Syntax:
+
+[COMBO]
+NAME=STYLE_BOX
+X=112
+Y=10
+W=190
+H=22
+SOURCE_ITEMS=Classic=CLASSIC|Modern=MODERN|Flat=FLAT
+DEFAULT_VALUE=Classic
+BIND_FILE=SYSTEM\UISTYLE.CFG
+BIND_KEY=style
+
+Common keys:
+- SOURCE_ITEMS: inline items separated by |.
+- SOURCE_DIR: folder to list.
+- SOURCE_MASK: file mask such as *.BMP.
+- SOURCE_INDEX: index file to load choices from.
+- VALUE_PREFIX: text added before the selected filename.
+- DEFAULT_VALUE: starting visible value.
+- DROP_ROWS: number of rows in dropdown.
+- DROP_W: dropdown width.
+- ACTION: action to run when selection changes.
+- DRAW_STYLE: optional draw mode for preview/image combos.
+
+Examples:
+
+SOURCE_ITEMS=Classic=CLASSIC|Modern=MODERN|Soft=SOFT
+
+SOURCE_DIR=ICONS\%ICONDEPTHFOLDER%LAUNCH\
+SOURCE_MASK=*.BMP
+VALUE_PREFIX=ICONS\LAUNCH\
+
+Notes:
+- SOURCE_ITEMS may use Display=Value.
+- If no value is given, the display text is used as the value.
+- Use LISTBOX for scrollable non-editable report output.
+
+
+LISTBOX
+
+Syntax:
+
+[LISTBOX]
+NAME=REPORT
+X=24
+Y=248
+W=520
+H=84
+STYLE=FOCUS_SELECT
+SOURCE_ITEMS=No scan has been run.
+
+Common keys:
+- SOURCE_ITEMS: inline list items separated by |.
+- SOURCE_DIR: folder to list.
+- SOURCE_MASK: file mask.
+- SOURCE_KIND=FILES or SOURCE_KIND=DIRS.
+- MULTISELECT=1: allow multiple selection.
+- STYLE=FOCUS_SELECT: selectable list.
+- ACTION: action to run when selection changes.
+- CONTEXT_ITEMS: right-click menu items.
+
+Examples:
+
+[LISTBOX]
+NAME=FILE_VIEW
+X=220
+Y=40
+W=300
+H=260
+SOURCE_DIR=.
+SOURCE_MASK=*.*
+
+[LISTBOX]
+NAME=DIR_TREE
+X=16
+Y=40
+W=180
+H=260
+SOURCE_KIND=DIRS
+
+
+PREVIEW
+
+Syntax:
+
+[PREVIEW]
+NAME=WALL_PREVIEW
+X=24
+Y=60
+W=300
+H=180
+SOURCE_CONTROL=WALL_FILE
+DRAW_STYLE=FIT_ASPECT
+
+Common keys:
+- SOURCE_CONTROL: textbox/combo/listbox containing the bitmap path.
+- DRAW_STYLE=FIT_ASPECT, STRETCH, TILE, or CENTER.
+- MODE_GROUP: preview script mode group.
+- PAGE: page/tab assignment.
+
+Example:
+
+[PREVIEW]
+X=24
+Y=248
+W=81
+H=21
+SOURCE_CONTROL=LAUNCHBMP
+DRAW_STYLE=FIT_ASPECT
+
+
+APPVIEW
+
+Syntax:
+
+[APPVIEW]
+NAME=GRID
+X=16
+Y=40
+W=256
+H=256
+DRAW_STYLE=PIXEL_GRID
+DEFAULT_VALUE=
+
+Common uses:
+- Icon Editor drawing grid.
+- Bitmap/palette preview controls.
+- App-owned image surfaces.
+
+Common actions:
+- APPVIEW_NEW
+- APPVIEW_OPEN
+- APPVIEW_SAVE
+- APPVIEW_SAVE_AS
+- APPVIEW_PAINT
+- APPVIEW_PICK_COLOR
+- APPVIEW_TOOL
+- APPVIEW_UNDO
+
+
+EVENT BLOCKS
+
+Events go in the [EVENTS] section of an .APP file.
+
+Syntax:
+
+[EVENTS]
+ON ACTION ACTION_NAME
+    HOST COMMAND ARG1 ARG2
+    HOST COMMAND2 ARG1 ARG2
+END
+
+Example:
+
+[EVENTS]
+ON ACTION SCAN_ONLY
+    HOST APPLY_BINDINGS
+    HOST RUN_INLINE_HELPER CLNHELP.EXE SCAN SYSTEM\TEMP\CLNREP.TXT
+    HOST PIPE_LIST_LOAD_FILE REPORT REPFILE
+    HOST TEXT_LOAD STATUS STATFILE
+END
+
+Notes:
+- Button ACTION=SCAN_ONLY calls the matching event.
+- HOST lines run shell-supported commands.
+- Keep commands simple and one action per line.
+
+
+SYS ACTION FILES
+
+SYS files hold reusable script sections.
+
+Syntax:
+
+[SECTION_NAME]
+ACTION=COMMAND ARG1 ARG2
+ACTION2=COMMAND ARG1 ARG2
+ACTION3=COMMAND ARG1 ARG2
+
+Call from an app:
+
+ACTION=SYS_ACTION APPFILE.SYS SECTION_NAME
+
+Example:
+
+[KEYBOARD]
+ACTION=SET_CONTROL_TEXT CALC_ACTION $1|
+ACTION2=TEXT_SAVE CALC_ACTION ACTION_FILE
+ACTION3=RUN_INLINE_HELPER CALCCTL.EXE
+ACTION4=TEXT_LOAD CALC_DISPLAY DISPLAY_FILE
+
+Then call it:
+
+KEY_ACTION=SYS_ACTION CALC.SYS KEYBOARD
+
+Notes:
+- ACTION lines run in numeric order: ACTION, ACTION2, ACTION3, and so on.
+- SYS_ACTION passes extra tokens into the SYS section.
+- $1 can be used by SYS_ACTION sections to use the first passed argument.
+
+
+CONTROL VALUE TOKENS
+
+Use these inside helper commands and action text:
+
+%CONTROL:CONTROLNAME%
+- Replaced with the current value of a control.
+
+%WINID%
+- Replaced with the current window instance number.
+
+%INSTANCE%
+- Same purpose as %WINID%.
+
+Example:
+
+HOST RUN_INLINE_HELPER HEXCTL.EXE OPEN "%CONTROL:HEX_PATH%"
+
+Example:
+
+ACTION=RUN_DISPLAY_HELPER IMGSLIDE.EXE "%CONTROL:IMG_PATH%" IMGCODEC.EXE SYSTEM\TEMP\SLIDE.BMP
+
+
+DYNAMIC LAYOUT TOKENS
+
+These are used in layout paths and values:
+
+%COLORDEPTH%
+- Current color depth value.
+
+%DEPTH%
+- Current selected depth token.
+
+%DEPTHFOLDER%
+- Color-depth folder name for general assets.
+
+%ICONDEPTHFOLDER%
+- Icon-depth folder segment.
+- Common values:
+  - blank for high color
+  - 256COLOR\
+  - 16COLOR\
+
+Example:
+
+SOURCE_DIR=ICONS\%ICONDEPTHFOLDER%LAUNCH\
+
+
+COMMON HOST COMMANDS
+
+Window and refresh commands
+
+CLOSE_WINDOW
+- Closes the current app window.
+
+Example:
+ACTION=CLOSE_WINDOW
+
+REFRESH_MEDIA
+MEDIA_REFRESH
+- Refreshes file/media-related shell caches after an app changes files.
+
+Example:
+HOST REFRESH_MEDIA
+
+INVALIDATE_PREVIEW_CACHE
+- Clears preview caches and redraws the active layout window.
+
+Example:
+HOST INVALIDATE_PREVIEW_CACHE
+
+
+Binding/config commands
+
+APPLY_BINDINGS
+- Writes bound control values to their BIND_FILE/BIND_KEY targets.
+
+Example:
+HOST APPLY_BINDINGS
+
+APPLY_BINDINGS_RELOAD_DISPLAY
+APPLY_BINDINGS_REFRESH_DISPLAY
+- Applies bound controls and refreshes display settings.
+
+Example:
+ACTION=APPLY_BINDINGS_RELOAD_DISPLAY
+
+CANCEL_BINDINGS
+RESET_BINDINGS
+- Reloads bound controls from their config files.
+
+Example:
+ACTION=RESET_BINDINGS
+
+REFRESH_BOUND_CONTROLS
+RELOAD_BOUND_CONTROLS
+- Refreshes bound controls from config without closing the app.
+
+Example:
+HOST REFRESH_BOUND_CONTROLS
+
+RESTORE_DEFAULTS
+- Restores defaults from app metadata where supported.
+
+
+Helper commands
+
+RUN_HELPER command
+RUN_SILENT command
+- Runs a helper without keeping Backlash blocked for inline output.
+
+Example:
+HOST RUN_HELPER CLEANUP.EXE
+
+RUN_INLINE_HELPER command
+RUN_INLINE_SILENT command
+- Runs a helper and waits for it to finish before continuing the event.
+
+Example:
+HOST RUN_INLINE_HELPER CLNHELP.EXE SCAN SYSTEM\TEMP\CLNREP.TXT
+
+RUN_DISPLAY_HELPER command
+- Runs a helper that displays output directly.
+
+Example:
+ACTION=RUN_DISPLAY_HELPER IMGSLIDE.EXE "%CONTROL:IMG_PATH%" IMGCODEC.EXE SYSTEM\TEMP\IMGSLIDE.BMP
+
+
+Text commands
+
+TEXT_NEW textbox
+- Clears a textbox.
+
+Example:
+HOST TEXT_NEW REPORT
+
+TEXT_LOAD targetTextbox fileTextbox
+- Loads a text file into a textbox. fileTextbox contains the path.
+
+Example:
+HOST TEXT_LOAD STATUS STATFILE
+
+TEXT_SAVE sourceTextbox fileTextbox
+- Saves textbox text to a file. fileTextbox contains the path.
+
+Example:
+HOST TEXT_SAVE EDIT_BOX PATH_BOX
+
+TEXT_SAVE_AUTO sourceTextbox fileTextbox startDir mask dialogApp
+- Saves if a filename is already known; otherwise opens a save dialog.
+
+Example:
+ACTION=TEXT_SAVE_AUTO EDIT_BOX PATH_BOX . *.TXT SYSTEM\DSK\DSKNEW.APP
+
+TEXT_SAVE_AS sourceTextbox fileTextbox startDir mask dialogApp
+- Opens a save dialog.
+
+TEXTBOX_CARET_END textbox
+TEXT_CARET_END textbox
+CONTROL_CARET_END textbox
+- Moves the caret to the end of the textbox.
+
+Example:
+HOST TEXT_CARET_END REPORT
+
+SET_TEXT control value
+- Used in SYS files to set a control value.
+
+Example:
+ACTION=SET_TEXT
+CONTROL=CALC_ACTION
+VALUE=PLUS
+
+SET_CONTROL_TEXT control text
+- Sets a control's visible text/value.
+
+Example:
+ACTION=SET_CONTROL_TEXT STATUS Ready.
+
+CLEAR_CONTROL control
+- Clears a control.
+
+Example:
+ACTION=CLEAR_CONTROL STATUS
+
+
+List and pipe-list commands
+
+PIPE_LIST_LOAD_FILE listbox fileTextbox
+- Loads a text file into a listbox. fileTextbox contains the path.
+
+Example:
+HOST PIPE_LIST_LOAD_FILE REPORT REPFILE
+
+PIPE_LIST_SAVE_FILE listbox fileTextbox statusBox typeBox nameBox actionBox iconBox parentBox
+- Saves a pipe/list editor list back to a file.
+
+PIPE_LIST_APPEND listbox typeBox nameBox actionBox iconBox parentBox statusBox
+- Adds an item to a pipe list.
+
+PIPE_LIST_DELETE listbox parentBox statusBox
+- Deletes the selected list item.
+
+PIPE_LIST_MOVE listbox UP parentBox statusBox
+PIPE_LIST_MOVE listbox DOWN parentBox statusBox
+- Moves the selected item.
+
+PIPE_LIST_CANCEL listbox fileTextbox parentBox statusBox
+- Cancels pipe-list edits and reloads original content.
+
+PIPE_ENTRY_SELECT listbox typeBox nameBox actionBox iconBox parentBox launchTypeBox statusBox
+- Copies the selected list entry into edit fields.
+
+PIPE_ENTRY_APPEND targetTextbox typeBox nameBox actionBox iconBox statusBox
+- Appends a menu/pipe entry line to a textbox.
+
+TEXT_LINE_DELETE textbox statusBox
+- Deletes the current line from a textbox.
+
+TEXT_LINE_MOVE textbox UP statusBox
+TEXT_LINE_MOVE textbox DOWN statusBox
+- Moves the current line up or down.
+
+
+File picker and file dialog commands
+
+FILE_PICK targetTextbox startDir mask dialogApp
+FILE_PICK_NOTIFY targetTextbox startDir mask dialogApp
+- Opens a file picker and writes the selected file path into targetTextbox.
+
+Example:
+ACTION=FILE_PICK IMG_PATH . *.BMP;*.GIF;*.JPG SYSTEM\DSK\DSKPICK.SYS
+
+DIR_PICK targetTextbox startDir dialogApp
+- Opens a directory picker.
+
+Example:
+ACTION=DIR_PICK TARGET_PATH . SYSTEM\DSK\DSKDPK.SYS
+
+FILE_NEW targetTextbox startDir mask dialogApp
+- Opens a new-file dialog.
+
+FILE_SELECT listbox
+- Selects the chosen file in a file dialog.
+
+FILE_DIR_CHANGE dirList
+- Changes the active directory in a file dialog.
+
+FILE_NEW_CREATE pathBox nameBox extension
+- Creates a new file using the path/name controls.
+
+Example:
+ACTION=FILE_NEW_CREATE PATH_BOX NEW_NAME .TXT
+
+
+File browser commands
+
+FILE_BROWSER_INIT pathBox
+- Initializes a Navigator-style browser.
+
+FILE_BROWSER_REFRESH pathBox
+- Refreshes the current file browser path.
+
+FILE_BROWSER_DIR_SELECT dirList fileList pathBox
+- Selects/enters a directory.
+
+FILE_BROWSER_DIR_NEW pathBox statusBox
+- Creates a new directory.
+
+FILE_BROWSER_DIR_OPEN_NEW dirList pathBox
+- Opens a directory in a new window.
+
+FILE_BROWSER_DIR_COPY sourceBox destBox copyFiles copySubdirs copyEmpty copyHidden copyOverwrite
+- Copies a directory according to checkbox options.
+
+FILE_BROWSER_FILE_SELECT fileList statusBox
+- Selects a file and updates status.
+
+FILE_BROWSER_FILE_OPEN fileList statusBox
+- Opens the selected file.
+
+FILE_BROWSER_FILE_EDIT fileList statusBox
+- Opens the selected file in the text editor when associated.
+
+FILE_BROWSER_FILE_CUT fileList statusBox
+FILE_BROWSER_FILE_COPY fileList statusBox
+FILE_BROWSER_FILE_PASTE destPath statusBox
+- File cut/copy/paste operations.
+
+FILE_BROWSER_FILE_DUPLICATE fileList statusBox
+FILE_BROWSER_DUPLICATE_APPLY pathBox newNameBox
+- Duplicate selected file.
+
+FILE_BROWSER_FILE_RENAME fileList statusBox
+FILE_BROWSER_RENAME_APPLY pathBox newNameBox
+- Rename selected file.
+
+FILE_BROWSER_FILE_DELETE fileList statusBox
+FILE_BROWSER_DELETE_APPLY
+- Delete selected file through the shell file browser path.
+
+FILE_BROWSER_FILE_PROPERTIES fileList statusBox
+FILE_BROWSER_ATTR_APPLY
+- Show/apply file properties and attributes.
+
+
+Trash commands
+
+TRASH_REFRESH listbox statusBox
+- Refreshes Waste Basket listing.
+
+TRASH_RESTORE listbox statusBox
+- Restores selected trash entry.
+
+TRASH_DELETE listbox statusBox
+- Permanently deletes selected trash entry.
+
+TRASH_EMPTY listbox statusBox
+- Empties Waste Basket.
+
+
+App variable commands
+
+APPVAR_SET name value
+- Sets an app variable.
+
+APPVAR_SET_ML name value
+- Sets a multiline app variable.
+
+APPVAR_CLEAR name
+- Clears one app variable.
+
+APPVAR_CLEAR_ALL
+- Clears all app variables for the app.
+
+APPVAR_CLEAR_PREFIX prefix
+- Clears variables whose names start with prefix.
+
+APPVAR_COPY sourceName destName
+- Copies one app variable to another.
+
+APPVAR_FROM_CONTROL varName controlName
+- Copies a control value into a variable.
+
+APPVAR_FROM_CONTROL_STATE varName controlName
+- Copies a checkbox/radio/control state into a variable.
+
+CONTROL_TEXT_FROM_APPVAR controlName varName
+CONTROL_TEXT_FROM_APPVAR_ML controlName varName
+- Writes an app variable into a control.
+
+CONTROL_STATE_FROM_APPVAR controlName varName
+- Writes an app variable into a control state.
+
+CONTROL_TEXT_EXPAND controlName text
+CONTROL_TEXT_EXPAND_ML controlName text
+- Expands tokens and writes text to a control.
+
+CONTROL_APPEND_TEXT controlName text
+- Appends plain text to a control.
+
+CONTROL_APPEND_EXPAND controlName text
+CONTROL_APPEND_EXPAND_ML controlName text
+- Expands tokens and appends text to a control.
+
+CONTROL_CLEAR controlName
+- Clears a control.
+
+APPVAR_ADD name amount
+APPVAR_SUB name amount
+APPVAR_MUL name amount
+APPVAR_DIV name amount
+APPVAR_MOD name amount
+- Math operations on numeric app variables.
+
+APPVAR_MIN name value
+APPVAR_MAX name value
+APPVAR_CLAMP name min max
+- Numeric limits for app variables.
+
+APPVAR_TOGGLE name
+- Toggles a numeric/boolean variable.
+
+APPVAR_RANDOM name min max
+- Sets variable to a random number in the range.
+
+APPVAR_APPEND name text
+APPVAR_PREPEND name text
+APPVAR_APPEND_LINE name text
+- String operations on app variables.
+
+APPVAR_EXPAND name text
+APPVAR_EXPAND_ML name text
+- Expands tokens into an app variable.
+
+APPVAR_LEN destName sourceName
+- Stores the length of one variable into another.
+
+APPVAR_SAVE name filePath
+APPVAR_LOAD name filePath
+- Saves or loads an app variable.
+
+
+Conditional commands
+
+APPIF_EQ name value sysFile section
+APPIF_NE name value sysFile section
+APPIF_GT name value sysFile section
+APPIF_GE name value sysFile section
+APPIF_LT name value sysFile section
+APPIF_LE name value sysFile section
+- Runs a SYS section when an app variable comparison is true.
+
+APPIF_EMPTY name sysFile section
+APPIF_NOT_EMPTY name sysFile section
+- Runs a SYS section based on whether an app variable is blank.
+
+APPSYS_IF_EQ file section key value sysFile sectionToRun
+APPSYS_IF_NE file section key value sysFile sectionToRun
+APPSYS_IF_GT file section key value sysFile sectionToRun
+APPSYS_IF_GE file section key value sysFile sectionToRun
+APPSYS_IF_LT file section key value sysFile sectionToRun
+APPSYS_IF_LE file section key value sysFile sectionToRun
+APPSYS_IF_EMPTY file section key sysFile sectionToRun
+APPSYS_IF_NOT_EMPTY file section key sysFile sectionToRun
+- Runs SYS sections based on config values.
+
+
+Config preset commands
+
+CFG_PRESET_LOAD
+- Loads available presets.
+
+CFG_PRESET_SAVE
+CFG_PRESET_SAVE_AS
+- Saves a preset.
+
+CFG_PRESET_APPLY
+PRESET_APPLY
+- Applies a preset.
+
+CFG_BINDINGS_APPLY
+BINDINGS_APPLY
+- Applies bound control values.
+
+CFG_SET_CONFIRM
+SET_CFG_CONFIRM
+- Sets a confirmation/status value for config actions.
+
+
+Control dialog commands
+
+CONTROL_EDIT_OPEN
+CONTROL_DIALOG_OPEN
+- Opens a linked control dialog.
+
+CONTROL_EDIT_CLOSE
+CONTROL_DIALOG_CLOSE
+CONTROL_DIALOG_APPLY_CLOSE
+- Closes a linked control dialog, optionally applying changes.
+
+FIND_DIALOG
+- Opens a Find/Replace dialog.
+
+FIND_NEXT
+- Finds the next match.
+
+REPLACE_NEXT
+- Replaces the next match.
+
+REPLACE_ALL
+- Replaces all matches.
+
+
+Sound commands
+
+SOUND_BEEP
+BEEP
+- Plays the default beep.
+
+SOUND_TONE frequency milliseconds
+PLAY_TONE frequency milliseconds
+- Plays a tone.
+
+Example:
+ACTION=SOUND_TONE 880 250
+
+SOUND_STOP
+- Stops sound.
+
+SOUND_STATUS
+- Writes sound status.
+
+SOUND_SBTEST
+SBTEST
+- Runs Sound Blaster test.
+
+SOUND_SBDMA
+SBDMA
+- Runs Sound Blaster DMA test.
+
+SOUND_WAV file
+SOUND_PLAY file
+PLAY_WAV file
+- Plays a WAV file.
+
+SOUND_PCM_PLAY file
+- Plays raw default PCM.
+
+SOUND_PCM_PLAY_EX file rate channels bits
+- Plays PCM with explicit format.
+
+SOUND_PCM_STATUS
+SOUND_PCM_STOP
+SOUND_PCM_PAUSE
+SOUND_PCM_RESUME
+- PCM playback control.
+
+
+Service refresh commands
+
+REFRESH_SERVICE_CONFIG SCREENSAVER
+REFRESH_SERVICE_CONFIG SOUND
+RELOAD_SERVICE_CONFIG SCREENSAVER
+RELOAD_SERVICE_CONFIG SOUND
+- Reloads service config.
+
+Examples:
+HOST REFRESH_SERVICE_CONFIG SOUND
+HOST REFRESH_SERVICE_CONFIG SCREENSAVER
+
+
+APPVIEW commands
+
+APPVIEW_NEW appviewControl width height colors statusControl
+- Starts a new appview surface.
+
+APPVIEW_OPEN appviewControl filenameControl statusControl
+- Opens an image into an APPVIEW control.
+
+APPVIEW_SAVE appviewControl filenameControl statusControl
+- Saves the APPVIEW image.
+
+APPVIEW_SAVE_AS appviewControl filenameControl statusControl
+- Opens save-as flow for APPVIEW.
+
+APPVIEW_PAINT appviewControl statusControl
+- Paints into APPVIEW using the selected tool.
+
+APPVIEW_PICK_COLOR paletteControl statusControl
+- Picks a color from a palette APPVIEW.
+
+APPVIEW_TOOL toolName statusControl
+- Sets active APPVIEW tool.
+
+Example:
+ACTION=APPVIEW_TOOL PENCIL STATUS
+
+APPVIEW_UNDO statusControl
+- Undoes the last APPVIEW edit.
+
+
+Launch and shell commands
+
+LAUNCH_APP appPath
+- Opens another Backlash app.
+
+Example:
+ACTION=LAUNCH_APP APPS\DISPLAY.APP
+
+LAUNCH_FROM_CONTROL commandControl externalCheckbox statusControl
+- Launches the command stored in a control.
+
+CONTROL_MENU_ACTION comboName
+- Runs the selected menu/combo command and resets the menu control.
+
+
+COMMON APP PATTERNS
+
+Simple close button:
+
+[BUTTON]
+TEXT=Close
+X=472
+Y=351
+W=72
+H=24
+ACTION=CLOSE_WINDOW
+
+Save settings button:
+
+[BUTTON]
+TEXT=Apply
+X=360
+Y=351
+W=72
+H=24
+ACTION=APPLY_BINDINGS
+
+Run helper and load report:
+
+[EVENTS]
+ON ACTION SCAN_ONLY
+    HOST APPLY_BINDINGS
+    HOST RUN_INLINE_HELPER CLNHELP.EXE SCAN SYSTEM\TEMP\CLNREP.TXT
+    HOST PIPE_LIST_LOAD_FILE REPORT REPFILE
+    HOST TEXT_LOAD STATUS STATFILE
+END
+
+Open a file picker:
+
+[BUTTON]
+TEXT=Open
+X=16
+Y=20
+W=72
+H=24
+ACTION=FILE_PICK PATH_BOX . *.TXT SYSTEM\DSK\DSKPICK.SYS
+
+Preview a selected bitmap:
+
+[COMBO]
+NAME=BMP_FILE
+X=16
+Y=20
+W=260
+H=22
+SOURCE_DIR=ICONS\LAUNCH\
+SOURCE_MASK=*.BMP
+VALUE_PREFIX=ICONS\LAUNCH\
+
+[PREVIEW]
+X=16
+Y=52
+W=180
+H=80
+SOURCE_CONTROL=BMP_FILE
+DRAW_STYLE=FIT_ASPECT
+
+Use a listbox as a scrollable report:
+
+[TEXTBOX]
+NAME=REPFILE
+TEXT=SYSTEM\TEMP\REPORT.TXT
+X=0
+Y=0
+W=1
+H=1
+READONLY=1
+
+[LISTBOX]
+NAME=REPORT
+X=24
+Y=100
+W=520
+H=120
+STYLE=FOCUS_SELECT
+SOURCE_ITEMS=No report loaded.
+
+[EVENTS]
+ON ACTION LOAD_REPORT
+    HOST PIPE_LIST_LOAD_FILE REPORT REPFILE
+END
+
+
+PRACTICAL RULES
+
+- Use LISTBOX for scrollable read-only reports.
+- Use TEXTBOX for editable text or short status fields.
+- Use helpers for heavy file work.
+- Keep app behavior in APP, SYS, CFG, and helper files.
+- Keep shell changes generic.
+- Do not hardcode app-specific behavior into shell/runtime.
+- Keep filenames DOS 8.3 unless there is a specific reason not to.
+- Do not use a window scrollbar unless the window content actually needs to scroll.
+- If a control has a scrollbar, the scrollbar must be functional.
+- Keep buttons fully readable.
+- Keep the bottom of the window 15 pixels below the lowest button.
+- Use HOST REFRESH_MEDIA after an app deletes or changes files that shell menus/lists may cache.

@@ -1,0 +1,67 @@
+# Backlash General Use License
+
+Copyright (c) 2026 Rick Reedus. All rights reserved.
+https://github.com/ReedusR/Backlash
+
+Backlash may be used, copied, shared, modified, and redistributed under the terms below.
+
+1. Permission Granted
+
+You may:
+
+* Use Backlash for personal or non-commercial purposes.
+* Share Backlash with others.
+* Modify Backlash.
+* Create and share modified versions of Backlash.
+* Study, copy, and build on the included source code.
+
+2. Required Attribution
+
+Any copy of Backlash, including modified versions, must keep the original author credit.
+
+Rick Reedus’s name must not be removed from:
+
+* Source code comments or headers
+* Documentation
+* Credits
+* License files
+* Included project files where the original author is credited
+
+3. Original Source Must Stay Included
+
+Any redistributed copy of Backlash, including modified versions, must include the original Backlash source code and original project files.
+
+Modified versions may add, change, or replace files, but the original Backlash source code and license must remain included so the original work can still be identified.
+
+4. Modified Versions
+
+Modified versions must be clearly identified as modified.
+
+You may not present a modified version as the original unmodified Backlash release.
+
+If you share a modified version, include a brief note stating that changes were made.
+
+5. No False Ownership Claims
+
+You may not claim that you created the original Backlash project.
+
+You may claim ownership of your own changes, additions, apps, artwork, or modifications, but not the original Backlash code or original Backlash project.
+
+6. No Warranty
+
+Backlash is provided as-is.
+
+There is no warranty of any kind. Use Backlash at your own risk.
+
+The author is not responsible for data loss, system crashes, damaged files, damaged hardware, lost work, lost time, or any other problem caused by installing, running, modifying, or using Backlash.
+
+7. Summary
+
+You may use it.
+You may share it.
+You may modify it.
+You may build on it.
+
+Do not remove the original source code.
+Do not remove the original author credit.
+Do not claim the original project as your own.
