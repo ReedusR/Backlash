@@ -1,0 +1,11 @@
+NAME=Ocean
+COLOR_DEPTH=4
+desktop_idx_4=1
+taskbar_idx_4=3
+select_idx_4=9
+text_idx_4=0
+textinv_idx_4=15
+control_bg_idx_4=11
+bevel_hi_idx_4=15
+bevel_lo_idx_4=1
+missing_idx_4=12

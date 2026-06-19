@@ -1,0 +1,11 @@
+NAME=Graphite
+COLOR_DEPTH=4
+desktop_idx_4=8
+taskbar_idx_4=8
+select_idx_4=7
+text_idx_4=15
+textinv_idx_4=0
+control_bg_idx_4=7
+bevel_hi_idx_4=15
+bevel_lo_idx_4=0
+missing_idx_4=12

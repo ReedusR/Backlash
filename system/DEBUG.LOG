@@ -1,0 +1,121 @@
+06-10-2026 19:36:44 DEBUG_LOG_BEGIN diagnostic_force=-1
+06-10-2026 19:36:44 STARTUP_AFTER_ENSURE activeWin=0 layoutCount=0 cfgDepth=0 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:44 STARTUP_BEFORE_LOADCONFIG activeWin=0 layoutCount=0 cfgDepth=0 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:44 STARTUP_AFTER_LOADCONFIG activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:44 STARTUP_BEFORE_SOUND_CONFIG activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:44 STARTUP_AFTER_SOUND_CONFIG activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:44 STARTUP_BEFORE_INITGUI activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:44 STARTUP_AFTER_INITGUI activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:44 STARTUP_BEFORE_SPLASH_WALLPAPER activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_AFTER_SPLASH_WALLPAPER activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_BEFORE_CURSOR_BUFFER activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_AFTER_CURSOR_BUFFER activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_BEFORE_RELOAD_ASSETS activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_AFTER_RELOAD_ASSETS activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_BEFORE_WINDOW_MANAGER activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_AFTER_WINDOW_MANAGER activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_BEFORE_CLEAR_DOS_REQUESTS activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_AFTER_CLEAR_DOS_REQUESTS activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_BEFORE_RESTORE_DOS_SESSION activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_AFTER_RESTORE_DOS_SESSION restored=0 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_BEFORE_RESTORE_SHUTDOWN_SESSION activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_AFTER_RESTORE_SHUTDOWN_SESSION restored=0 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_BEFORE_STARTUP_SOUND activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_AFTER_STARTUP_SOUND activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_BEFORE_FREE_SPLASH activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 STARTUP_AFTER_FREE_SPLASH activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 MAIN_LOOP_BEGIN activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:45 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:47 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:47 MAIN_PRIMARY_CHANGE state=-1 mx=31 my=586 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:47 MAIN_PRIMARY_CHANGE state=0 mx=31 my=586 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:49 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=-1
+06-10-2026 19:36:51 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=-1
+06-10-2026 19:36:52 MAIN_PRIMARY_CHANGE state=-1 mx=255 my=543 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=-1
+06-10-2026 19:36:52 MAIN_PRIMARY_CHANGE state=0 mx=255 my=543 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=-1
+06-10-2026 19:36:52 MENU_ACTION_REQUEST idx=27 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=-1
+06-10-2026 19:36:52 MENU_ACTION_EXEC idx=27 action=C:\BACKLASH\APPS\CLEANER\CLEANER.APP activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=-1
+06-10-2026 19:36:52 LAUNCH_REQUEST raw=C:\BACKLASH\APPS\CLEANER\CLEANER.APP normalized=C:\BACKLASH\APPS\CLEANER\CLEANER.APP activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=-1
+06-10-2026 19:36:52 LAUNCH_ROUTE_APP path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:52 EXEC_APP_REQUEST path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=0 slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:52 OPEN_REQUEST path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=0 slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:52 OPEN_BEFORE_LOAD path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=0 slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=1 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:52 OPEN_AFTER_LOAD path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP uiCount=15 targetWin=0 slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:36:52 OPEN_BEFORE_INIT_SLOT path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=1 slots= z= activeWin=1 layoutCount=0 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=0 winTab=0 winPressed=0 winFocus=0 comboOpen=0
+06-10-2026 19:36:52 OPEN_AFTER_INIT_SLOT path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z= activeWin=1 layoutCount=0 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:36:52 OPEN_AFTER_ZORDER path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=0 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:36:52 OPEN_BEFORE_RUNTIME_INIT path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:36:52 OPEN_AFTER_RUNTIME_INIT path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:36:52 OPEN_DONE path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:36:52 LAYOUT_LOOP_ENTER path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:36:53 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:36:55 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:36:57 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:36:59 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:01 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=8 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=8 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:03 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:05 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:07 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:09 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:11 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:13 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:15 HEARTBEAT loop=layout slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=0 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=0 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:16 CLOSE_BEGIN targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=15 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=15 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:16 CLOSE_BEFORE_FREE_CACHES targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=15 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=15 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:16 CLOSE_AFTER_FREE_CACHES targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=15 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=15 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:16 CLOSE_BEFORE_TEMP_BINDS targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=15 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=15 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:16 CLOSE_AFTER_TEMP_BINDS targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=15 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=15 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:16 CLOSE_BEFORE_ACTIVE_EDITOR_RESET targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=15 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=15 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:16 CLOSE_AFTER_ACTIVE_EDITOR_RESET targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=15 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=15 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:16 CLOSE_BEFORE_SLOT_CLEAR targetWin=1 slots=1:A#15[C:\BACKLASH\APPS\CLEANER\CLEANER.APP] z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=15 uiFocus=0 startMenu=0 winUsed=-1 winTab=1 winPressed=15 winFocus=0 comboOpen=0 app=C:\BACKLASH\APPS\CLEANER\CLEANER.APP
+06-10-2026 19:37:16 CLOSE_AFTER_SLOT_CLEAR targetWin=1 slots= z=1 activeWin=1 layoutCount=1 cfgDepth=16 uiTab=1 uiCount=15 uiPressed=15 uiFocus=0 startMenu=0 winUsed=0 winTab=0 winPressed=0 winFocus=0 comboOpen=0
+06-10-2026 19:37:16 CLOSE_BEFORE_APPVIEW_FREE targetWin=1 slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:16 CLOSE_AFTER_APPVIEW_FREE targetWin=1 slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:16 CLOSE_BEFORE_RT_CLEAR targetWin=1 slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:16 CLOSE_DONE targetWin=1 slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:16 LAYOUT_LOOP_EXIT path=C:\BACKLASH\APPS\CLEANER\CLEANER.APP targetWin=0 slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:17 MAIN_PRIMARY_CHANGE state=-1 mx=583 my=283 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:17 MAIN_PRIMARY_CHANGE state=0 mx=584 my=283 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:17 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:19 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:21 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:23 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:25 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:27 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:29 MAIN_PRIMARY_CHANGE state=-1 mx=703 my=91 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:29 MAIN_PRIMARY_CHANGE state=0 mx=703 my=91 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:29 HEARTBEAT loop=main slots= z= activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:29 MAIN_KEY len=1 code1=27 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:29 SHUTDOWN_BEGIN activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:29 SHUTDOWN_BEFORE_SAVE_SESSION activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:29 SHUTDOWN_AFTER_SAVE_SESSION activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:29 SHUTDOWN_BEFORE_DRAW_SCREEN activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:29 SHUTDOWN_AFTER_DRAW_SCREEN activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:29 SHUTDOWN_BEFORE_SOUND activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 SHUTDOWN_AFTER_SOUND activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_MAIN_LOOP activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_SOUNDSTOP activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_SOUNDSTOP activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_DMA_RELEASE activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_DMA_RELEASE activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_FREE_CURSOR activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_FREE_CURSOR activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_FREE_DESKTOP activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_FREE_DESKTOP activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_FREE_TASKBAR activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_FREE_TASKBAR activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_FREE_STARTMENU activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_FREE_STARTMENU activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_FREE_GRADIENTS activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_FREE_GRADIENTS activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_FREE_BACKGROUND activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_FREE_BACKGROUND activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_FREE_WALLPAPER activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_FREE_WALLPAPER activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_FREE_STARTSTRIP activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_FREE_STARTSTRIP activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_FREE_ICONS activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_FREE_ICONS activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_SCREEN0 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_AFTER_SCREEN0 activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0
+06-10-2026 19:37:31 EXIT_BEFORE_END activeWin=0 layoutCount=0 cfgDepth=16 uiTab=0 uiCount=0 uiPressed=0 uiFocus=0 startMenu=0

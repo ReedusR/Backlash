@@ -1,0 +1,50 @@
+Backlash Sound Status
+enabled=YES
+configured_driver=SBLASTER
+requested_driver=SBLASTER
+effective_driver=SBLASTER
+status_file=SYSTEM\SNDSTAT.TXT
+volume=100
+taskbar_volume=YES
+settings_app=APPS\SOUND\SOUND.APP
+fallback_to_tone=YES
+click_wav=SYSTEM\SOUNDS\CLICK01.WAV
+menu_wav=C:\BACKLASH\SYSTEM\SOUNDS\CLICK02.WAV
+error_wav=SYSTEM\SOUNDS\ERROR.WAV
+startup_wav=SYSTEM\SOUNDS\STARTUP.WAV
+
+AdLib/OPL
+adlib_detect_enabled=YES
+adlib_base_hex=0388
+adlib_detected=NO
+
+Sound Blaster
+blaster_env=A220 I7 D1 H5 P330 T6
+sb_detect_enabled=YES
+sb_base_hex=0220
+sb_irq=7
+sb_dma8=1
+sb_dma16=5
+sb_type=6
+sb_dsp_detected=YES
+sb_dsp_version_known=YES
+sb_dsp_version_major=4
+sb_dsp_version_minor=5
+sb_direct_test_ready=YES
+sb_dma8_channel_valid=YES
+sb_dma_test_ready=YES
+sb_private_dma_buffer=NO
+sb_private_dma_bytes=0
+sb_wav_ready=YES
+sb_wav_format=PCM_UNSIGNED_8BIT_MONO
+sb_wav_max_sample_bytes=32768
+sb_wav_pad_bytes=64
+pcm_stream_active=NO
+pcm_stream_path=
+pcm_stream_total_bytes=0
+pcm_stream_bytes_read=0
+pcm_stream_chunks=0
+pcm_stream_status=
+pcm_stream_error=
+sb_output_ready=YES
+sb_output_reason=8-bit DMA routed tone output ready
