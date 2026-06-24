@@ -43,6 +43,11 @@ DECLARE FUNCTION FileMaskAllowsFile(BYVAL fileName AS STRING, BYVAL maskText AS 
 DECLARE SUB OpenLayoutAppWindow(BYVAL appPath AS STRING)
 DECLARE SUB OpenLayoutAppWindowFromSavedState(BYVAL appPath AS STRING)
 DECLARE SUB OpenLayoutAppWindowCore(BYVAL appPath AS STRING, BYVAL activeStateAlreadySaved AS INTEGER)
+DECLARE FUNCTION LayoutPersistentStateFilePath(BYVAL appPath AS STRING) AS STRING
+DECLARE FUNCTION LayoutPersistentStateEnabled(BYVAL appPath AS STRING) AS INTEGER
+DECLARE SUB LayoutSavePersistentState(BYVAL winIdx AS INTEGER)
+DECLARE SUB LayoutApplyPersistentState(BYVAL winIdx AS INTEGER)
+DECLARE SUB LayoutRefreshPersistentFileBrowserState(BYVAL winIdx AS INTEGER)
 DECLARE SUB LoadAppLayout(BYVAL appPath AS STRING)
 DECLARE SUB LoadSelectedLayoutPageControls()
 DECLARE SUB RemoveLoadedLayoutPageControls()
@@ -73,6 +78,9 @@ DECLARE FUNCTION RectIntersectsClip(BYVAL x1 AS INTEGER, BYVAL y1 AS INTEGER, BY
 DECLARE SUB FillRectClipped(BYVAL x1 AS INTEGER, BYVAL y1 AS INTEGER, BYVAL x2 AS INTEGER, BYVAL y2 AS INTEGER, _
                             BYVAL clipL AS INTEGER, BYVAL clipT AS INTEGER, BYVAL clipR AS INTEGER, BYVAL clipB AS INTEGER, _
                             BYVAL colValue AS INTEGER)
+DECLARE SUB LineHClipped(BYVAL x1 AS INTEGER, BYVAL x2 AS INTEGER, BYVAL y AS INTEGER, _
+                         BYVAL clipL AS INTEGER, BYVAL clipT AS INTEGER, BYVAL clipR AS INTEGER, BYVAL clipB AS INTEGER, _
+                         BYVAL colValue AS INTEGER)
 DECLARE SUB LineVClipped(BYVAL x AS INTEGER, BYVAL y1 AS INTEGER, BYVAL y2 AS INTEGER, _
                          BYVAL clipL AS INTEGER, BYVAL clipT AS INTEGER, BYVAL clipR AS INTEGER, BYVAL clipB AS INTEGER, _
                          BYVAL colValue AS INTEGER)
@@ -286,6 +294,7 @@ CONST UI_KIND_SPLITTER = 9
 CONST UI_KIND_APPVIEW = 10
 CONST UI_KIND_OVERLAY = 11
 CONST UI_KIND_CANVAS = 12
+CONST UI_KIND_MENUBAR = 13
 
 CONST UI_MODE_NONE = 0
 CONST UI_MODE_TEXT_STATS = 1
@@ -294,6 +303,8 @@ CONST UI_MODE_SYS = 2
 CONST UI_SOURCE_NONE = 0
 CONST UI_SOURCE_DIRS = 1
 CONST UI_SOURCE_FILES = 2
+CONST UI_SOURCE_COMBINED = 3
+CONST UI_SOURCE_DRIVES = 4
 
 CONST UI_DRAW_NONE = 0
 CONST UI_DRAW_PREVIEW = 1
@@ -382,6 +393,7 @@ SUB NormalizeUiElementKeys(BYREF elem AS UIElement)
     CASE "APPVIEW": elem.kindId = UI_KIND_APPVIEW
     CASE "OVERLAY": elem.kindId = UI_KIND_OVERLAY
     CASE "CANVAS": elem.kindId = UI_KIND_CANVAS
+    CASE "MENUBAR": elem.kindId = UI_KIND_MENUBAR
     CASE ELSE: elem.kindId = UI_KIND_NONE
     END SELECT
 
@@ -394,6 +406,8 @@ SUB NormalizeUiElementKeys(BYREF elem AS UIElement)
     SELECT CASE elem.sourceKindKey
     CASE "DIRS": elem.sourceKindId = UI_SOURCE_DIRS
     CASE "FILES": elem.sourceKindId = UI_SOURCE_FILES
+    CASE "COMBINED": elem.sourceKindId = UI_SOURCE_COMBINED
+    CASE "DRIVES": elem.sourceKindId = UI_SOURCE_DRIVES
     CASE ELSE: elem.sourceKindId = UI_SOURCE_NONE
     END SELECT
 
@@ -473,10 +487,47 @@ DIM SHARED duplicateSourceWin AS INTEGER
 DIM SHARED copySourceWin AS INTEGER
 DIM SHARED fileBrowserClipboardPath AS STRING
 DIM SHARED fileBrowserClipboardMode AS STRING
+DIM SHARED fileBrowserClipboardDestDir AS STRING
+DIM SHARED fileBrowserClipboardDestList AS STRING
+DIM SHARED fileBrowserClipboardDestPathControl AS STRING
+DIM SHARED fileBrowserDialogDefaultDestDir AS STRING
+DIM SHARED fileBrowserDialogDefaultDestControl AS STRING
+DIM SHARED layoutFileBrowserActiveList(1 TO 12) AS STRING
+DIM SHARED layoutFileBrowserColorsReady(1 TO 12) AS INTEGER
+DIM SHARED layoutFileBrowserColorsEnabled(1 TO 12) AS INTEGER
+DIM SHARED layoutFileBrowserSortMode(1 TO 12) AS STRING
+DIM SHARED layoutFileBrowserMaskText(1 TO 12) AS STRING
+DIM SHARED fileBrowserMaskSourceWin AS INTEGER
+DIM SHARED fileBrowserMaskStatusControl AS STRING
+CONST FILE_BROWSER_COLOR_MAX = 128
+DIM SHARED fileBrowserColorCachePath AS STRING
+DIM SHARED fileBrowserColorCacheStamp AS DOUBLE
+DIM SHARED fileBrowserColorCacheDepth AS INTEGER
+DIM SHARED fileBrowserColorCount AS INTEGER
+DIM SHARED fileBrowserColorExt(1 TO FILE_BROWSER_COLOR_MAX) AS STRING
+DIM SHARED fileBrowserColorCol(1 TO FILE_BROWSER_COLOR_MAX) AS UINTEGER
 DIM SHARED fileDragDropSourceList AS STRING
 DIM SHARED fileDragDropDestDir AS STRING
 DIM SHARED fileDragDropSourceWin AS INTEGER
 DIM SHARED fileDragDropStatusControl AS STRING
+' Generic file-operation progress and conflict state. Apps provide labels/policy;
+' shell code only owns reusable copy/move/delete mechanics.
+DIM SHARED fileOpProgressActive AS INTEGER
+DIM SHARED fileOpProgressSourceWin AS INTEGER
+DIM SHARED fileOpProgressTitle AS STRING
+DIM SHARED fileOpProgressAction AS STRING
+DIM SHARED fileOpProgressSrc AS STRING
+DIM SHARED fileOpProgressDst AS STRING
+DIM SHARED fileOpProgressFiles AS INTEGER
+DIM SHARED fileOpProgressDirs AS INTEGER
+DIM SHARED fileOpProgressFails AS INTEGER
+DIM SHARED fileOpProgressSkipped AS INTEGER
+DIM SHARED fileOpProgressNextDraw AS DOUBLE
+DIM SHARED fileOpConflictMode AS INTEGER
+DIM SHARED fileOpCancel AS INTEGER
+DIM SHARED fileBrowserDragHoverWin AS INTEGER
+DIM SHARED fileBrowserDragHoverElem AS INTEGER
+DIM SHARED fileBrowserDragHoverValue AS STRING
 DIM SHARED assocExt(1 TO 128) AS STRING
 DIM SHARED assocAction(1 TO 128) AS STRING
 DIM SHARED assocCount AS INTEGER
@@ -651,6 +702,11 @@ DIM SHARED layoutKeyAction(1 TO 12) AS STRING
 DIM SHARED layoutCtrlSAction(1 TO 12) AS STRING
 ' Cached save-status label name avoids rereading APP config while typing.
 DIM SHARED layoutTextSaveStatusControl(1 TO 12) AS STRING
+' Generic app menu bar state. The shell stores only active menu geometry/state;
+' captions and actions stay app-owned in the layout file.
+DIM SHARED appMenuOpenWin AS INTEGER
+DIM SHARED appMenuOpenElem AS INTEGER
+DIM SHARED appMenuOpenTop AS INTEGER
 ' Generic per-window APP/SYS variable storage.  This is idle-cost free:
 ' commands touch it only from HostAppAction, never from mouse/redraw loops.
 CONST APPVAR_MAX_SLOTS = 512
@@ -1182,6 +1238,8 @@ DECLARE SUB DrawDesktopContextMenu()
 DECLARE FUNCTION ShellCfgValue2(BYVAL sectionName AS STRING, BYVAL keyName AS STRING, BYVAL legacyKeyName AS STRING, BYVAL defaultValue AS STRING) AS STRING
 DECLARE FUNCTION ShellCfgPath(BYVAL sectionName AS STRING, BYVAL keyName AS STRING, BYVAL legacyKeyName AS STRING) AS STRING
 DECLARE FUNCTION ShellHandlerPath(BYVAL keyName AS STRING) AS STRING
+DECLARE FUNCTION ShellNavigatorAppPath() AS STRING
+DECLARE FUNCTION ShellPathIsLegacyNavigator(BYVAL pathText AS STRING) AS INTEGER
 DECLARE FUNCTION ShellDesktopPath(BYVAL keyName AS STRING, BYVAL legacyKeyName AS STRING) AS STRING
 DECLARE FUNCTION ShellDesktopTempPath(BYVAL keyName AS STRING, BYVAL legacyKeyName AS STRING) AS STRING
 DECLARE FUNCTION MenuEditorTargetPath() AS STRING
@@ -1244,6 +1302,8 @@ DECLARE SUB ListSelectionToggle(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGE
 DECLARE SUB ListSelectionSelectAll(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER)
 DECLARE SUB ListSelectionSelectRange(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL firstIdx AS INTEGER, BYVAL lastIdx AS INTEGER)
 DECLARE FUNCTION DelimitedListCount(BYVAL itemList AS STRING) AS INTEGER
+DECLARE FUNCTION FileBrowserSelectionStatusText(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL fallbackValue AS STRING, BYVAL showSingle AS INTEGER) AS STRING
+DECLARE SUB FileBrowserUpdateSelectionStatus(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL statusControlName AS STRING, BYVAL showSingle AS INTEGER)
 DECLARE FUNCTION ListSelectionFilePaths(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL fallbackValue AS STRING) AS STRING
 DECLARE FUNCTION ListSelectionBrowserPaths(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL fallbackValue AS STRING) AS STRING
 DECLARE FUNCTION AppCfgValue(BYVAL fileName AS STRING, BYVAL keyName AS STRING, BYVAL defaultValue AS STRING) AS STRING
@@ -1318,6 +1378,7 @@ DECLARE FUNCTION ParentPath(BYVAL filePath AS STRING) AS STRING
 DECLARE FUNCTION CurrentDrivePrefix() AS STRING
 DECLARE FUNCTION AbsoluteDirPath(BYVAL dirName AS STRING) AS STRING
 DECLARE FUNCTION DirectoryHasAnyEntry(BYVAL dirPath AS STRING) AS INTEGER
+DECLARE FUNCTION DriveRootAccessible(BYVAL driveRoot AS STRING) AS INTEGER
 DECLARE FUNCTION ResolvePathFromAppWindow(BYVAL winIdx AS INTEGER, BYVAL relPath AS STRING) AS STRING
 DECLARE FUNCTION ResolveAppLocalPath(BYVAL winIdx AS INTEGER, BYVAL rawPath AS STRING) AS STRING
 DECLARE FUNCTION ResolveAppLocalFilePath(BYVAL winIdx AS INTEGER, BYVAL rawPath AS STRING) AS STRING
@@ -1334,10 +1395,50 @@ DECLARE SUB ConfigureNewFileDialogWindow(BYVAL dlgWin AS INTEGER)
 DECLARE SUB ApplyLayoutWindowDialogFocus(BYVAL targetWin AS INTEGER)
 DECLARE FUNCTION AppControlNameValue(BYVAL winIdx AS INTEGER, BYVAL keyName AS STRING, BYVAL defaultValue AS STRING) AS STRING
 DECLARE FUNCTION FileBrowserWindowCurrentDir(BYVAL winIdx AS INTEGER) AS STRING
+DECLARE FUNCTION FileBrowserResolveActionControlName(BYVAL winIdx AS INTEGER, BYVAL controlName AS STRING, BYVAL preferDirs AS INTEGER) AS STRING
+DECLARE FUNCTION FileBrowserResolvePathControlName(BYVAL winIdx AS INTEGER, BYVAL controlName AS STRING) AS STRING
+DECLARE FUNCTION FileBrowserOppositeListName(BYVAL winIdx AS INTEGER, BYVAL listControlName AS STRING) AS STRING
+DECLARE FUNCTION FileBrowserOppositePathControlName(BYVAL winIdx AS INTEGER, BYVAL listControlName AS STRING) AS STRING
+DECLARE FUNCTION FileBrowserOppositePathForList(BYVAL winIdx AS INTEGER, BYVAL listControlName AS STRING) AS STRING
+DECLARE SUB FileBrowserSetActiveListByName(BYVAL winIdx AS INTEGER, BYVAL listControlName AS STRING)
+DECLARE SUB FileBrowserSetActiveListByIndex(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER)
+DECLARE FUNCTION FileBrowserListIsActive(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER) AS INTEGER
+DECLARE FUNCTION FileBrowserListIsBrowserList(BYVAL elemIdx AS INTEGER) AS INTEGER
+DECLARE FUNCTION FileBrowserListIsVisibleOnCurrentPage(BYVAL elemIdx AS INTEGER) AS INTEGER
+DECLARE FUNCTION FileBrowserActivePaneFrameColor() AS UINTEGER
+DECLARE FUNCTION FileBrowserColorsConfigPath(BYVAL winIdx AS INTEGER) AS STRING
+DECLARE FUNCTION FileBrowserFlagEnabled(BYVAL flagText AS STRING, BYVAL defaultEnabled AS INTEGER) AS INTEGER
+DECLARE SUB FileBrowserInitColorState(BYVAL winIdx AS INTEGER)
+DECLARE FUNCTION FileBrowserColorsEnabled(BYVAL winIdx AS INTEGER) AS INTEGER
+DECLARE FUNCTION FileBrowserRgbTextToColor(BYVAL rgbText AS STRING, BYVAL fallbackCol AS UINTEGER) AS UINTEGER
+DECLARE SUB FileBrowserLoadExtensionColors(BYVAL winIdx AS INTEGER)
+DECLARE FUNCTION FileBrowserRowTextColor(BYVAL winIdx AS INTEGER, BYVAL itemValue AS STRING) AS UINTEGER
+DECLARE SUB FileBrowserToggleColors(BYVAL winIdx AS INTEGER, BYVAL statusControlName AS STRING)
+DECLARE FUNCTION FileBrowserNormalizeSortMode(BYVAL sortText AS STRING) AS STRING
+DECLARE FUNCTION FileBrowserSortMode(BYVAL winIdx AS INTEGER) AS STRING
+DECLARE FUNCTION FileBrowserSortKey(BYVAL winIdx AS INTEGER, BYVAL itemText AS STRING, BYVAL itemValue AS STRING) AS STRING
+DECLARE FUNCTION FileBrowserSortPaddedLong(BYVAL n AS LONGINT) AS STRING
+DECLARE SUB SortFileBrowserTempItems(BYVAL winIdx AS INTEGER, BYVAL firstIdx AS INTEGER, BYVAL lastIdx AS INTEGER)
+DECLARE SUB FileBrowserSetSortMode(BYVAL winIdx AS INTEGER, BYVAL sortText AS STRING, BYVAL statusControlName AS STRING)
+DECLARE FUNCTION FileBrowserNormalizeMaskText(BYVAL maskText AS STRING) AS STRING
+DECLARE FUNCTION FileBrowserMaskTextForWindow(BYVAL winIdx AS INTEGER) AS STRING
+DECLARE FUNCTION FileBrowserMaskDisplayText(BYVAL winIdx AS INTEGER) AS STRING
+DECLARE FUNCTION FileBrowserFileAllowedByMask(BYVAL winIdx AS INTEGER, BYVAL fileName AS STRING) AS INTEGER
+DECLARE SUB FileBrowserApplyMask(BYVAL winIdx AS INTEGER, BYVAL maskText AS STRING, BYVAL statusControlName AS STRING)
+DECLARE SUB ShowFileBrowserMaskDialog(BYVAL dialogAppPath AS STRING, BYVAL sourceWin AS INTEGER, BYVAL statusControlName AS STRING)
+DECLARE SUB FileBrowserEnsureActiveListForPage(BYVAL winIdx AS INTEGER)
+DECLARE SUB RefreshFileBrowserAuxListControls(BYVAL expWin AS INTEGER, BYVAL dirName AS STRING, BYVAL primaryDirName AS STRING, BYVAL primaryFileName AS STRING, BYREF statsText AS STRING)
 DECLARE FUNCTION ResolveDeletePathForApply(BYVAL rawPath AS STRING, BYVAL isDir AS INTEGER) AS STRING
 DECLARE SUB ConfigureFileBrowserWindow(BYVAL expWin AS INTEGER, BYVAL dirName AS STRING)
+DECLARE SUB ConfigureFileBrowserPane(BYVAL expWin AS INTEGER, BYVAL listControlName AS STRING, BYVAL pathControlName AS STRING, BYVAL statsControlName AS STRING, BYVAL dirName AS STRING)
+DECLARE SUB FileBrowserRefreshVisibleListsInPlace(BYVAL expWin AS INTEGER)
+DECLARE FUNCTION FileBrowserRootPath(BYVAL dirName AS STRING) AS STRING
+DECLARE SUB FileBrowserNavigateToPath(BYVAL winIdx AS INTEGER, BYVAL pathControlName AS STRING, BYVAL listControlName AS STRING, BYVAL statusControlName AS STRING, BYVAL dirName AS STRING, BYVAL statusVerb AS STRING)
+DECLARE SUB MarkFileBrowserDriveBarsForPath(BYVAL expWin AS INTEGER, BYVAL pathControlName AS STRING)
 DECLARE SUB ApplyVerticalSplitterPosition(BYVAL splitterIdx AS INTEGER, BYVAL newSplitX AS INTEGER)
 DECLARE SUB ApplyLayoutAutoFit(BYVAL winIdx AS INTEGER)
+DECLARE FUNCTION LayoutCenterPairToken(BYVAL pairText AS STRING, BYVAL tokenNo AS INTEGER) AS STRING
+DECLARE SUB ApplyLayoutCenterPairs(BYVAL winIdx AS INTEGER)
 DECLARE SUB ShowFileProperties(BYVAL fileName AS STRING, BYVAL dialogAppPath AS STRING, BYVAL itemIsDir AS INTEGER)
 DECLARE SUB ShowFileRename(BYVAL fileName AS STRING, BYVAL dialogAppPath AS STRING, BYVAL sourceWin AS INTEGER)
 DECLARE SUB ShowDirectoryCreate(BYVAL parentDir AS STRING, BYVAL dialogAppPath AS STRING, BYVAL sourceWin AS INTEGER)
@@ -1346,10 +1447,18 @@ DECLARE SUB ShowFileDuplicate(BYVAL fileName AS STRING, BYVAL dialogAppPath AS S
 DECLARE SUB ShowDirectoryCopy(BYVAL dirName AS STRING, BYVAL dialogAppPath AS STRING, BYVAL sourceWin AS INTEGER)
 DECLARE SUB ShowFileDragDrop(BYVAL sourceList AS STRING, BYVAL destDir AS STRING, BYVAL dialogAppPath AS STRING, BYVAL sourceWin AS INTEGER, BYVAL statusControlName AS STRING)
 DECLARE SUB FileBrowserCopyMoveListToDir(BYVAL sourceList AS STRING, BYVAL targetDir AS STRING, BYVAL moveMode AS INTEGER, BYVAL sourceWin AS INTEGER, BYVAL statusControlName AS STRING)
+DECLARE SUB FileBrowserCopyMoveActiveToOpposite(BYVAL sourceWin AS INTEGER, BYVAL moveMode AS INTEGER, BYVAL statusControlName AS STRING)
 DECLARE FUNCTION FileBrowserPathIsDirectory(BYVAL itemPath AS STRING) AS INTEGER
 DECLARE FUNCTION FileBrowserDirDropUnsafe(BYVAL sourceDir AS STRING, BYVAL targetDir AS STRING) AS INTEGER
 DECLARE FUNCTION FileBrowserConfirmOverwrite(BYVAL targetPath AS STRING, BYVAL targetIsDir AS INTEGER, BYVAL moveMode AS INTEGER) AS INTEGER
+DECLARE FUNCTION FileOpAppText(BYVAL sourceWin AS INTEGER, BYVAL keyName AS STRING, BYVAL defaultText AS STRING) AS STRING
+DECLARE SUB FileOpProgressBegin(BYVAL sourceWin AS INTEGER, BYVAL actionName AS STRING)
+DECLARE SUB FileOpProgressUpdate(BYVAL sourcePath AS STRING, BYVAL destPath AS STRING, BYVAL filesDone AS INTEGER, BYVAL dirsDone AS INTEGER, BYVAL failsDone AS INTEGER, BYVAL skipsDone AS INTEGER, BYVAL forceDraw AS INTEGER)
+DECLARE SUB FileOpProgressEnd()
+DECLARE FUNCTION FileOpConflictChoice(BYVAL targetPath AS STRING, BYVAL targetIsDir AS INTEGER, BYVAL moveMode AS INTEGER, BYVAL sourceWin AS INTEGER) AS INTEGER
+DECLARE FUNCTION FileOpCopyFileWithConflict(BYVAL srcPath AS STRING, BYVAL dstPath AS STRING, BYVAL overwriteMode AS INTEGER) AS INTEGER
 DECLARE FUNCTION ActiveLayoutListBoxItemValueAtPoint(BYVAL elemIdx AS INTEGER, BYVAL px AS INTEGER, BYVAL py AS INTEGER) AS STRING
+DECLARE FUNCTION FileBrowserDirDropTargetAtPoint(BYVAL px AS INTEGER, BYVAL py AS INTEGER, BYREF itemValue AS STRING) AS INTEGER
 DECLARE FUNCTION DirectoryEntryList(BYVAL srcDir AS STRING) AS STRING
 DECLARE FUNCTION DirectoryCopyHasItems(BYVAL srcDir AS STRING, BYVAL copyFiles AS INTEGER, BYVAL copySubDirs AS INTEGER, BYVAL copyEmptyDirs AS INTEGER, BYVAL includeHiddenSystem AS INTEGER) AS INTEGER
 DECLARE FUNCTION CopyFileSafeOverwrite(BYVAL srcPath AS STRING, BYVAL dstPath AS STRING, BYVAL overwriteExisting AS INTEGER) AS INTEGER
@@ -1609,6 +1718,22 @@ DECLARE SUB GetTaskbarButtonRect(BYVAL slotIdx AS INTEGER, BYREF x1 AS INTEGER, 
 DECLARE FUNCTION TaskbarButtonFromPoint(BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER) AS INTEGER
 DECLARE SUB DrawTaskbarButtons()
 DECLARE SUB ExecuteLayoutButtonAction(BYVAL elemIdx AS INTEGER)
+DECLARE SUB AppMenuClose()
+DECLARE FUNCTION AppMenuTopSpec(BYVAL winIdx AS INTEGER, BYVAL topIdx AS INTEGER) AS STRING
+DECLARE FUNCTION AppMenuTopCaption(BYVAL winIdx AS INTEGER, BYVAL topIdx AS INTEGER) AS STRING
+DECLARE FUNCTION AppMenuTopSection(BYVAL winIdx AS INTEGER, BYVAL topIdx AS INTEGER) AS STRING
+DECLARE FUNCTION AppMenuTopCount(BYVAL winIdx AS INTEGER) AS INTEGER
+DECLARE FUNCTION AppMenuItemSpec(BYVAL winIdx AS INTEGER, BYVAL sectionName AS STRING, BYVAL itemIdx AS INTEGER) AS STRING
+DECLARE FUNCTION AppMenuItemCaption(BYVAL itemSpec AS STRING) AS STRING
+DECLARE FUNCTION AppMenuItemAction(BYVAL itemSpec AS STRING) AS STRING
+DECLARE SUB AppMenuTopRect(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL topIdx AS INTEGER, BYREF rx1 AS INTEGER, BYREF ry1 AS INTEGER, BYREF rx2 AS INTEGER, BYREF ry2 AS INTEGER)
+DECLARE SUB AppMenuPanelRect(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL topIdx AS INTEGER, BYREF rx1 AS INTEGER, BYREF ry1 AS INTEGER, BYREF rx2 AS INTEGER, BYREF ry2 AS INTEGER)
+DECLARE FUNCTION AppMenuHitTop(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER) AS INTEGER
+DECLARE FUNCTION AppMenuHitItem(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL topIdx AS INTEGER, BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER) AS INTEGER
+DECLARE FUNCTION AppMenuPointHitsElement(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER) AS INTEGER
+DECLARE SUB DrawAppMenuBarElement(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL ex AS INTEGER, BYVAL ey AS INTEGER, BYVAL ew AS INTEGER, BYVAL eh AS INTEGER, BYVAL clipL AS INTEGER, BYVAL clipT AS INTEGER, BYVAL clipR AS INTEGER, BYVAL clipB AS INTEGER)
+DECLARE SUB DrawOpenAppMenu(BYVAL winIdx AS INTEGER)
+DECLARE FUNCTION AppMenuHandleClick(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER) AS INTEGER
 DECLARE FUNCTION ComboDividerFlagFromText(BYREF itemTextIn AS STRING, BYREF itemValueIn AS STRING) AS INTEGER
 DECLARE FUNCTION ComboItemIsDivider(BYVAL itemIdx AS INTEGER) AS INTEGER
 DECLARE FUNCTION ComboItemPixelHeight(BYVAL itemIdx AS INTEGER) AS INTEGER
@@ -1626,6 +1751,8 @@ DECLARE FUNCTION CalcScrollThumbSize(BYVAL viewSize AS INTEGER, BYVAL totalSize 
 DECLARE FUNCTION CalcScrollThumbTop(BYVAL scrollPos AS INTEGER, BYVAL maxScroll AS INTEGER, BYVAL trackTop AS INTEGER, BYVAL trackSize AS INTEGER, BYVAL thumbSize AS INTEGER) AS INTEGER
 DECLARE FUNCTION CalcScrollPosFromThumbTop(BYVAL thumbTop AS INTEGER, BYVAL trackTop AS INTEGER, BYVAL trackSize AS INTEGER, BYVAL thumbSize AS INTEGER, BYVAL maxScroll AS INTEGER) AS INTEGER
 DECLARE FUNCTION ApplyWheelToScroll(BYVAL scrollPos AS INTEGER, BYVAL wheelDelta AS INTEGER, BYVAL maxScroll AS INTEGER, BYVAL stepSize AS INTEGER) AS INTEGER
+DECLARE FUNCTION LayoutDeclaredPageName(BYVAL pageIdx AS INTEGER) AS STRING
+DECLARE FUNCTION LayoutDeclaredPageIndex(BYVAL pageName AS STRING) AS INTEGER
 DECLARE SUB GetLayoutActivePage(BYREF activePage AS STRING)
 DECLARE SUB GetLayoutContentExtents(BYREF contentW AS INTEGER, BYREF contentH AS INTEGER)
 DECLARE SUB GetLayoutScrollMetrics(BYREF showHScroll AS INTEGER, BYREF showVScroll AS INTEGER, BYREF clientW AS INTEGER, BYREF clientH AS INTEGER, BYREF maxScrollX AS INTEGER, BYREF maxScrollY AS INTEGER)
@@ -1650,6 +1777,7 @@ DECLARE FUNCTION NormalizeActionRawUpperCached(BYVAL textIn AS STRING, BYREF raw
 DECLARE FUNCTION ParseActionHeaderCached(BYVAL actIn AS STRING, BYREF rawOut AS STRING, BYREF tokenOut AS STRING, BYREF argsOut AS STRING) AS INTEGER
 DECLARE FUNCTION HostActionDirectActiveWindowRedrawOnly(BYVAL actIn AS STRING) AS INTEGER
 DECLARE FUNCTION LayoutKeyActionToken(BYVAL keyIn AS STRING) AS STRING
+DECLARE FUNCTION LayoutAppKeyActionToken(BYVAL winIdx AS INTEGER, BYVAL keyIn AS STRING) AS STRING
 DECLARE FUNCTION LayoutInteractiveKeyToken(BYVAL keyIn AS STRING) AS STRING
 DECLARE FUNCTION KeyTokenFromInkey(BYVAL keyIn AS STRING) AS STRING
 DECLARE FUNCTION KeyScanFromInkey(BYVAL keyIn AS STRING) AS INTEGER
@@ -2778,6 +2906,121 @@ FUNCTION MakeCol(BYVAL r AS INTEGER, BYVAL g AS INTEGER, BYVAL b AS INTEGER) AS 
 END FUNCTION
 
 
+FUNCTION LayoutCenterPairToken(BYVAL pairText AS STRING, BYVAL tokenNo AS INTEGER) AS STRING
+    DIM i AS INTEGER
+    DIM ch AS STRING
+    DIM tokenText AS STRING
+    DIM tokenCount AS INTEGER
+
+    LayoutCenterPairToken = ""
+    tokenText = ""
+    tokenCount = 0
+
+    FOR i = 1 TO LEN(pairText)
+        ch = MID$(pairText, i, 1)
+        IF ch = " " OR ch = "," OR ch = "|" OR ASC(ch) = 9 THEN
+            IF tokenText <> "" THEN
+                tokenCount = tokenCount + 1
+                IF tokenCount = tokenNo THEN RETURN tokenText
+                tokenText = ""
+            END IF
+        ELSE
+            tokenText = tokenText + ch
+        END IF
+    NEXT
+
+    IF tokenText <> "" THEN
+        tokenCount = tokenCount + 1
+        IF tokenCount = tokenNo THEN RETURN tokenText
+    END IF
+END FUNCTION
+
+SUB ApplyLayoutCenterPairs(BYVAL winIdx AS INTEGER)
+    DIM appPath AS STRING
+    DIM keyName AS STRING
+    DIM pairSpec AS STRING
+    DIM leftName AS STRING
+    DIM rightName AS STRING
+    DIM leftIdx AS INTEGER
+    DIM rightIdx AS INTEGER
+    DIM pairNo AS INTEGER
+    DIM leftMargin AS INTEGER
+    DIM rightMargin AS INTEGER
+    DIM gapW AS INTEGER
+    DIM availW AS INTEGER
+    DIM leftW AS INTEGER
+    DIM rightW AS INTEGER
+    DIM minLeftW AS INTEGER
+    DIM minRightW AS INTEGER
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    IF TRIM$(appPath) = "" THEN EXIT SUB
+    IF uiDesignW < 1 THEN EXIT SUB
+
+    FOR pairNo = 1 TO 16
+        keyName = "LAYOUT_CENTER_PAIR_" + LTRIM$(STR$(pairNo))
+        pairSpec = TRIM$(AppCfgValue(appPath, keyName, ""))
+        IF pairSpec = "" THEN
+            keyName = "CENTER_PAIR_" + LTRIM$(STR$(pairNo))
+            pairSpec = TRIM$(AppCfgValue(appPath, keyName, ""))
+        END IF
+
+        IF pairSpec = "" THEN EXIT FOR
+
+        leftName = LayoutCenterPairToken(pairSpec, 1)
+        rightName = LayoutCenterPairToken(pairSpec, 2)
+        IF leftName <> "" AND rightName <> "" THEN
+            leftIdx = GetControlIndexByName(leftName)
+            rightIdx = GetControlIndexByName(rightName)
+
+            IF leftIdx >= 1 AND leftIdx <= uiCount AND rightIdx >= 1 AND rightIdx <= uiCount THEN
+                IF uiElems(leftIdx).baseW = 0 THEN uiElems(leftIdx).baseW = uiElems(leftIdx).w
+                IF uiElems(rightIdx).baseW = 0 THEN uiElems(rightIdx).baseW = uiElems(rightIdx).w
+                IF uiElems(leftIdx).baseX = 0 AND uiElems(leftIdx).x <> 0 THEN uiElems(leftIdx).baseX = uiElems(leftIdx).x
+                IF uiElems(rightIdx).baseX = 0 AND uiElems(rightIdx).x <> 0 THEN uiElems(rightIdx).baseX = uiElems(rightIdx).x
+
+                leftMargin = uiElems(leftIdx).baseX
+                rightMargin = uiDesignW - (uiElems(rightIdx).baseX + uiElems(rightIdx).baseW)
+                gapW = uiElems(rightIdx).baseX - (uiElems(leftIdx).baseX + uiElems(leftIdx).baseW)
+
+                IF leftMargin < 0 THEN leftMargin = 0
+                IF rightMargin < 0 THEN rightMargin = 0
+                IF gapW < 0 THEN gapW = 8
+
+                availW = uiWinW - leftMargin - rightMargin - gapW
+                minLeftW = 48
+                minRightW = 48
+                IF uiElems(leftIdx).kindId = UI_KIND_TEXTBOX THEN minLeftW = 80
+                IF uiElems(rightIdx).kindId = UI_KIND_TEXTBOX THEN minRightW = 80
+                IF uiElems(leftIdx).kindId = UI_KIND_LISTBOX THEN minLeftW = 96
+                IF uiElems(rightIdx).kindId = UI_KIND_LISTBOX THEN minRightW = 96
+
+                IF availW < minLeftW + minRightW THEN availW = minLeftW + minRightW
+
+                leftW = availW \ 2
+                rightW = availW - leftW
+                IF leftW < minLeftW THEN
+                    leftW = minLeftW
+                    rightW = availW - leftW
+                END IF
+                IF rightW < minRightW THEN
+                    rightW = minRightW
+                    leftW = availW - rightW
+                    IF leftW < minLeftW THEN leftW = minLeftW
+                END IF
+
+                uiElems(leftIdx).x = leftMargin
+                uiElems(leftIdx).w = leftW
+                uiElems(rightIdx).x = leftMargin + leftW + gapW
+                uiElems(rightIdx).w = rightW
+            END IF
+        END IF
+    NEXT
+END SUB
+
 SUB ApplyLayoutAutoFit(BYVAL winIdx AS INTEGER)
     DIM i AS INTEGER
     DIM deltaW AS INTEGER
@@ -2818,6 +3061,9 @@ SUB ApplyLayoutAutoFit(BYVAL winIdx AS INTEGER)
             uiElems(i).y = uiElems(i).baseY + deltaH
         END IF
     NEXT
+
+    ' Optional app-owned center pairs keep dual panes evenly split after resize/maximize.
+    ApplyLayoutCenterPairs winIdx
 
     IF winIdx >= LBOUND(layoutWindows) AND winIdx <= UBOUND(layoutWindows) THEN
         IF layoutWindows(winIdx).used <> 0 THEN
@@ -4447,6 +4693,7 @@ FUNCTION DirectoryTreeSizeBytesDirect(BYVAL dirName AS STRING) AS LONGINT
     scanPos = 1
 
     DO WHILE scanPos <= LEN(entries)
+        IF fileOpCancel <> 0 THEN EXIT DO
         lineEnd = INSTR(scanPos, entries, CHR$(10))
         IF lineEnd = 0 THEN lineEnd = LEN(entries) + 1
         entryLine = MID$(entries, scanPos, lineEnd - scanPos)
@@ -4698,7 +4945,9 @@ FUNCTION DirectoryStatsText(BYVAL dirName AS STRING) AS STRING
     dirName = AbsoluteDirPath(TRIM$(dirName))
     IF dirName = "" THEN dirName = AbsoluteDirPath(".")
 
-    IF DirectoryStatsCacheLookup(dirName, statsText) <> 0 THEN RETURN statsText
+    IF FileBrowserMaskTextForWindow(activeLayoutWindow) = "" THEN
+        IF DirectoryStatsCacheLookup(dirName, statsText) <> 0 THEN RETURN statsText
+    END IF
 
     ' Build the visible directory list before reading file sizes so file-size probes cannot corrupt enumeration.
     entries = DirectoryEntryList(dirName)
@@ -4717,8 +4966,10 @@ FUNCTION DirectoryStatsText(BYVAL dirName AS STRING) AS STRING
             IF fname <> "." AND fname <> ".." THEN
                 IF (attrBits AND &H10) = 0 THEN
                     fullName = JoinPath(dirName, fname)
-                    fileCount = fileCount + 1
-                    totalBytes = totalBytes + FileSizeBytes(fullName)
+                    IF FileBrowserFileAllowedByMask(activeLayoutWindow, fullName) <> 0 THEN
+                        fileCount = fileCount + 1
+                        totalBytes = totalBytes + FileSizeBytes(fullName)
+                    END IF
                 END IF
             END IF
         END IF
@@ -4726,7 +4977,8 @@ FUNCTION DirectoryStatsText(BYVAL dirName AS STRING) AS STRING
     LOOP
 
     statsText = "Files: " + LTRIM$(STR$(fileCount)) + "   Total size: " + FilePaneFormattedSize(totalBytes)
-    DirectoryStatsCacheStore dirName, statsText
+    IF FileBrowserMaskTextForWindow(activeLayoutWindow) <> "" THEN statsText = statsText + "   Mask: " + FileBrowserMaskTextForWindow(activeLayoutWindow)
+    IF FileBrowserMaskTextForWindow(activeLayoutWindow) = "" THEN DirectoryStatsCacheStore dirName, statsText
     RETURN statsText
 END FUNCTION
 
@@ -4769,11 +5021,12 @@ SUB BuildFileBrowserFileItemsFast(BYVAL elemIdx AS INTEGER, BYVAL dirName AS STR
             IF fname <> "." AND fname <> ".." THEN
                 IF (attrBits AND &H10) = 0 THEN
                     fullName = JoinPath(dirName, fname)
-                    fileBytes = FileSizeBytes(fullName)
-                    fileCount = fileCount + 1
-                    totalBytes = totalBytes + fileBytes
+                    IF FileMatchesDialogMask(fullName, uiElems(elemIdx).sourceMask) <> 0 AND _
+                       FileBrowserFileAllowedByMask(activeLayoutWindow, fullName) <> 0 THEN
+                        fileBytes = FileSizeBytes(fullName)
+                        fileCount = fileCount + 1
+                        totalBytes = totalBytes + fileBytes
 
-                    IF FileMatchesDialogMask(fullName, uiElems(elemIdx).sourceMask) <> 0 THEN
                         IF tempComboItemCount < 256 THEN
                             tempComboItemCount = tempComboItemCount + 1
                             tempComboItems(tempComboItemCount) = FileNameOnly(fullName)
@@ -4786,10 +5039,11 @@ SUB BuildFileBrowserFileItemsFast(BYVAL elemIdx AS INTEGER, BYVAL dirName AS STR
         scanPos = lineEnd + 1
     LOOP
 
-    SortTempComboItems 1, tempComboItemCount
+    SortFileBrowserTempItems activeLayoutWindow, 1, tempComboItemCount
 
     statsText = "Files: " + LTRIM$(STR$(fileCount)) + "   Total size: " + FilePaneFormattedSize(totalBytes)
-    DirectoryStatsCacheStore dirName, statsText
+    IF FileBrowserMaskTextForWindow(activeLayoutWindow) <> "" THEN statsText = statsText + "   Mask: " + FileBrowserMaskTextForWindow(activeLayoutWindow)
+    IF FileBrowserMaskTextForWindow(activeLayoutWindow) = "" THEN DirectoryStatsCacheStore dirName, statsText
 END SUB
 
 SUB UpdateDirectoryStatsControl(BYVAL winIdx AS INTEGER, BYVAL dirName AS STRING, BYVAL statsControlName AS STRING)
@@ -5096,6 +5350,7 @@ SUB OpenTextFileInLayoutApp(BYVAL fileName AS STRING, BYVAL appPath AS STRING)
     layoutWindows(activeLayoutWindow).caretPos = 0
     layoutWindows(activeLayoutWindow).scrollY = 0
     layoutWindows(activeLayoutWindow).scrollX = 0
+    MarkLayoutTextSavedBaseline activeLayoutWindow, editorControlName, fileControlName
     SyncLayoutWindowFromGlobals activeLayoutWindow
 
     IF layoutLoopRunning = 0 THEN
@@ -8095,11 +8350,11 @@ SUB EnsureStartupFiles()
         "dosrunmode=RESIDENT" + eol + _
         "launchlabel=Launch" + eol + _
         "[HANDLERS]" + eol + _
-        "DIRECTORY_LINK_OPEN=" + eol + _
+        "DIRECTORY_LINK_OPEN=APPS\NAVIGATR\NAVIGATR.APP" + eol + _
         "DESKTOP_PROPERTIES_OPEN=" + eol + _
         "LAUNCH_MENU_EDIT=" + eol + _
         "[DIALOGS]" + eol + _
-        "DIR_PICK_DIALOG=" + eol + _
+        "DIR_PICK_DIALOG=APPS\NAVIGATR\NAVIGATR.APP" + eol + _
         "[DESKTOP]" + eol + _
         "ICON_PROPERTIES_DIALOG=" + eol + _
         "ICON_PROPERTIES_TEMP=" + eol + _
@@ -11464,10 +11719,16 @@ SUB ListSelectionSelectAll(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER)
     DIM cacheSlot AS INTEGER
     DIM seenCount AS INTEGER
     DIM itemAlreadySeen AS INTEGER
+    DIM selectFilesOnly AS INTEGER
+    DIM appPath AS STRING
     DIM seenKeys(1 TO 256) AS STRING
 
     IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
     IF elemIdx < 1 OR elemIdx > uiCount THEN EXIT SUB
+
+    ' Select All directory policy is app-owned; shell only applies the declared mode.
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    selectFilesOnly = FileBrowserFlagEnabled(AppCfgValue(appPath, "FILE_BROWSER_SELECT_ALL_FILES_ONLY", "NO"), 0)
 
     outBag = ""
     seenCount = 0
@@ -11475,6 +11736,10 @@ SUB ListSelectionSelectAll(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER)
 
     FOR i = 1 TO itemCount
         itemValue = RTRIM$(ComboFastItemValue(cacheSlot, i))
+        IF selectFilesOnly <> 0 THEN
+            IF uiElems(elemIdx).sourceKindId = UI_SOURCE_DIRS THEN itemValue = ""
+            IF uiElems(elemIdx).sourceKindId = UI_SOURCE_COMBINED AND LEFT$(itemValue, 2) = "D:" THEN itemValue = ""
+        END IF
         IF itemValue <> "" THEN
             itemKey = UCASE$(itemValue)
             itemAlreadySeen = 0
@@ -11581,6 +11846,136 @@ FUNCTION DelimitedListCount(BYVAL itemList AS STRING) AS INTEGER
 
     RETURN itemCount
 END FUNCTION
+
+FUNCTION FileBrowserSelectionStatusText(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL fallbackValue AS STRING, BYVAL showSingle AS INTEGER) AS STRING
+    DIM appPath AS STRING
+    DIM enabledText AS STRING
+    DIM bag AS STRING
+    DIM token AS STRING
+    DIM itemPath AS STRING
+    DIM sepPos AS INTEGER
+    DIM itemStart AS INTEGER
+    DIM itemLen AS INTEGER
+    DIM fileCount AS INTEGER
+    DIM dirCount AS INTEGER
+    DIM totalCount AS INTEGER
+    DIM totalBytes AS LONGINT
+    DIM statusText AS STRING
+    DIM prefixText AS STRING
+    DIM fileWord AS STRING
+    DIM dirWord AS STRING
+    DIM filePart AS STRING
+    DIM dirPart AS STRING
+
+    FileBrowserSelectionStatusText = ""
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT FUNCTION
+    IF layoutWindows(winIdx).used = 0 THEN EXIT FUNCTION
+    IF elemIdx < 1 OR elemIdx > uiCount THEN EXIT FUNCTION
+    IF FileBrowserListIsBrowserList(elemIdx) = 0 THEN EXIT FUNCTION
+
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    enabledText = AppCfgValue(appPath, "FILE_BROWSER_SELECTION_STATUS", "NO")
+    IF FileBrowserFlagEnabled(enabledText, 0) = 0 THEN EXIT FUNCTION
+
+    bag = layoutListMultiSel(winIdx, elemIdx)
+    IF TRIM$(bag) = "" THEN bag = RTRIM$(fallbackValue)
+
+    itemLen = LEN(bag)
+    itemStart = 1
+    fileCount = 0
+    dirCount = 0
+    totalBytes = 0
+
+    DO WHILE itemStart <= itemLen
+        sepPos = INSTR(itemStart, bag, CHR$(1))
+        IF sepPos > 0 THEN
+            token = MID$(bag, itemStart, sepPos - itemStart)
+            itemStart = sepPos + 1
+        ELSE
+            token = MID$(bag, itemStart)
+            itemStart = itemLen + 1
+        END IF
+
+        token = RTRIM$(token)
+        IF LEFT$(UCASE$(token), 2) = "F:" THEN
+            itemPath = NormalizePath(MID$(token, 3))
+            IF itemPath <> "" THEN
+                fileCount = fileCount + 1
+                totalBytes = totalBytes + FileSizeBytes(itemPath)
+            END IF
+        ELSEIF LEFT$(UCASE$(token), 2) = "D:" THEN
+            itemPath = AbsoluteDirPath(MID$(token, 3))
+            IF itemPath <> "" THEN dirCount = dirCount + 1
+        END IF
+    LOOP
+
+    totalCount = fileCount + dirCount
+    IF totalCount < 1 THEN EXIT FUNCTION
+    IF showSingle = 0 AND totalCount < 2 THEN EXIT FUNCTION
+
+    prefixText = AppCfgValue(appPath, "FILE_BROWSER_SELECTION_PREFIX", "Selected:")
+    IF prefixText = "" THEN prefixText = "Selected:"
+
+    statusText = prefixText + " "
+    IF fileCount > 0 THEN
+        IF fileCount = 1 THEN
+            fileWord = AppCfgValue(appPath, "FILE_BROWSER_SELECTION_FILE_SINGULAR", "file")
+        ELSE
+            fileWord = AppCfgValue(appPath, "FILE_BROWSER_SELECTION_FILE_PLURAL", "files")
+        END IF
+        filePart = LTRIM$(STR$(fileCount)) + " " + fileWord
+        statusText = statusText + filePart
+    END IF
+
+    IF dirCount > 0 THEN
+        IF dirCount = 1 THEN
+            dirWord = AppCfgValue(appPath, "FILE_BROWSER_SELECTION_DIR_SINGULAR", "directory")
+        ELSE
+            dirWord = AppCfgValue(appPath, "FILE_BROWSER_SELECTION_DIR_PLURAL", "directories")
+        END IF
+        dirPart = LTRIM$(STR$(dirCount)) + " " + dirWord
+        IF fileCount > 0 THEN statusText = statusText + ", "
+        statusText = statusText + dirPart
+    END IF
+
+    IF fileCount > 0 THEN statusText = statusText + ", " + FilePaneFormattedSize(totalBytes)
+    FileBrowserSelectionStatusText = statusText
+END FUNCTION
+
+SUB FileBrowserUpdateSelectionStatus(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL statusControlName AS STRING, BYVAL showSingle AS INTEGER)
+    DIM restoreWin AS INTEGER
+    DIM selectedValue AS STRING
+    DIM statusText AS STRING
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+    IF elemIdx < 1 OR elemIdx > uiCount THEN EXIT SUB
+    IF FileBrowserListIsBrowserList(elemIdx) = 0 THEN EXIT SUB
+
+    statusControlName = TRIM$(statusControlName)
+    IF statusControlName = "" THEN statusControlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+    IF statusControlName = "" THEN EXIT SUB
+
+    selectedValue = ControlValueFromListControl(elemIdx)
+    statusText = FileBrowserSelectionStatusText(winIdx, elemIdx, selectedValue, showSingle)
+    IF statusText = "" THEN EXIT SUB
+
+    restoreWin = activeLayoutWindow
+    IF activeLayoutWindow <> winIdx THEN
+        activeLayoutWindow = winIdx
+        SyncGlobalsFromLayoutWindow winIdx
+    END IF
+    SetTextboxTextByName statusControlName, statusText
+    SyncLayoutWindowFromGlobals winIdx
+
+    IF restoreWin <> activeLayoutWindow THEN
+        activeLayoutWindow = restoreWin
+        IF activeLayoutWindow >= LBOUND(layoutWindows) AND activeLayoutWindow <= UBOUND(layoutWindows) THEN
+            IF layoutWindows(activeLayoutWindow).used <> 0 THEN SyncGlobalsFromLayoutWindow activeLayoutWindow
+        END IF
+    END IF
+END SUB
+
 FUNCTION ListSelectionFilePaths(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL fallbackValue AS STRING) AS STRING
     DIM bag AS STRING
     DIM outBag AS STRING
@@ -11729,6 +12124,30 @@ FUNCTION ActiveLayoutListBoxItemValueAtPoint(BYVAL elemIdx AS INTEGER, BYVAL px 
 
     RETURN ComboFastItemValue(cacheSlot, itemIdx)
 END FUNCTION
+
+FUNCTION FileBrowserDirDropTargetAtPoint(BYVAL px AS INTEGER, BYVAL py AS INTEGER, BYREF itemValue AS STRING) AS INTEGER
+    DIM i AS INTEGER
+    DIM activePage AS STRING
+    DIM probeValue AS STRING
+
+    itemValue = ""
+    FileBrowserDirDropTargetAtPoint = 0
+    GetLayoutActivePage activePage
+
+    FOR i = 1 TO uiCount
+        IF uiElems(i).kindId = UI_KIND_LISTBOX THEN
+            IF uiElems(i).sourceKindId = UI_SOURCE_DIRS OR uiElems(i).sourceKindId = UI_SOURCE_COMBINED THEN
+                IF uiElems(i).page = "" OR uiElems(i).pageKey = activePage THEN
+                    probeValue = ActiveLayoutListBoxItemValueAtPoint(i, px, py)
+                    IF LEFT$(UCASE$(probeValue), 2) = "D:" THEN
+                        itemValue = probeValue
+                        RETURN i
+                    END IF
+                END IF
+            END IF
+        END IF
+    NEXT
+END FUNCTION
 FUNCTION ContextMenuCfgValue(BYVAL ownerWin AS INTEGER, BYVAL keyName AS STRING, BYVAL defaultValue AS STRING) AS STRING
     DIM appPath AS STRING
     DIM lookupKey AS STRING
@@ -11834,6 +12253,7 @@ FUNCTION ContextMenuRowCount(BYVAL ownerWin AS INTEGER, BYVAL isDir AS INTEGER, 
 
     IF isDir <> 0 THEN
         rowCount = 5
+        IF TRIM$(ContextMenuCfgValue(ownerWin, "CONTEXT_CUT_TEXT", "")) <> "" THEN rowCount = rowCount + 1
         IF TRIM$(ContextMenuCfgValue(ownerWin, "CONTEXT_COPY_TEXT", "")) <> "" THEN rowCount = rowCount + 1
     ELSE
         rowCount = 5
@@ -11905,6 +12325,10 @@ SUB DrawSimpleContextMenu(BYVAL menuX AS INTEGER, BYVAL menuY AS INTEGER, BYVAL 
     IF isDir <> 0 THEN
         DRAW STRING (menuX + 8, rowY), newDirText, COL_TEXT
         rowY = rowY + 18
+        IF TRIM$(cutText) <> "" THEN
+            DRAW STRING (menuX + 8, rowY), cutText, COL_TEXT
+            rowY = rowY + 18
+        END IF
         IF TRIM$(copyText) <> "" THEN
             DRAW STRING (menuX + 8, rowY), copyText, COL_TEXT
             rowY = rowY + 18
@@ -12647,7 +13071,15 @@ FUNCTION DesktopPropertiesTargetPath() AS STRING
 END FUNCTION
 
 FUNCTION DirectoryPickerDialogPath() AS STRING
-    RETURN ShellCfgPath("DIALOGS", "DIR_PICK_DIALOG", "DIR_PICK_DIALOG")
+    DIM pickerPath AS STRING
+
+    pickerPath = ShellCfgPath("DIALOGS", "DIR_PICK_DIALOG", "DIR_PICK_DIALOG")
+    IF pickerPath = "" OR ShellPathIsLegacyNavigator(pickerPath) <> 0 THEN
+        pickerPath = ShellNavigatorAppPath()
+        SetCfgValueInSection PATH_SHELLCFG, "DIALOGS", "DIR_PICK_DIALOG", pickerPath
+    END IF
+
+    RETURN NormalizePath(pickerPath)
 END FUNCTION
 
 FUNCTION DesktopIconPropertiesDialogPath() AS STRING
@@ -13498,8 +13930,32 @@ SUB ApplyDesktopIconAddTextFromControls(BYVAL winIdx AS INTEGER)
     END IF
 END SUB
 
+FUNCTION ShellNavigatorAppPath() AS STRING
+    RETURN "APPS\NAVIGATR\NAVIGATR.APP"
+END FUNCTION
+
+FUNCTION ShellPathIsLegacyNavigator(BYVAL pathText AS STRING) AS INTEGER
+    DIM workPath AS STRING
+
+    workPath = UCASE$(NormalizePath(TRIM$(pathText)))
+    IF workPath = "" THEN RETURN 0
+    IF workPath = UCASE$(NormalizePath(ShellNavigatorAppPath())) THEN RETURN 0
+    IF INSTR(workPath, "NAVGATR") > 0 THEN RETURN -1
+    IF workPath = "APPS\NAVIGATR.APP" THEN RETURN -1
+    IF RIGHT$(workPath, LEN("\NAVIGATR.APP")) = "\NAVIGATR.APP" AND INSTR(workPath, "APPS\NAVIGATR\") = 0 THEN RETURN -1
+    RETURN 0
+END FUNCTION
+
 FUNCTION DesktopDirectoryLinkTargetPath() AS STRING
-    RETURN ShellHandlerPath("DIRECTORY_LINK_OPEN")
+    DIM handlerPath AS STRING
+
+    handlerPath = ShellHandlerPath("DIRECTORY_LINK_OPEN")
+    IF handlerPath = "" OR ShellPathIsLegacyNavigator(handlerPath) <> 0 THEN
+        handlerPath = ShellNavigatorAppPath()
+        SetCfgValueInSection PATH_SHELLCFG, "HANDLERS", "DIRECTORY_LINK_OPEN", handlerPath
+    END IF
+
+    RETURN NormalizePath(handlerPath)
 END FUNCTION
 
 SUB OpenDesktopDirectoryLink(BYVAL dirPath AS STRING)
@@ -15697,6 +16153,36 @@ FUNCTION LayoutHasPageFiles() AS INTEGER
     RETURN 0
 END FUNCTION
 
+FUNCTION LayoutDeclaredPageName(BYVAL pageIdx AS INTEGER) AS STRING
+    DIM keyName AS STRING
+
+    LayoutDeclaredPageName = ""
+    IF pageIdx < 1 OR pageIdx > 12 THEN EXIT FUNCTION
+    IF TRIM$(uiLayoutAppPath) = "" THEN EXIT FUNCTION
+
+    keyName = "PAGE_" + LTRIM$(STR$(pageIdx))
+    LayoutDeclaredPageName = UCASE$(TRIM$(AppCfgValue(uiLayoutAppPath, keyName, "")))
+END FUNCTION
+
+FUNCTION LayoutDeclaredPageIndex(BYVAL pageName AS STRING) AS INTEGER
+    DIM i AS INTEGER
+    DIM pageText AS STRING
+    DIM targetText AS STRING
+
+    LayoutDeclaredPageIndex = 0
+    targetText = UCASE$(TRIM$(pageName))
+    IF targetText = "" THEN EXIT FUNCTION
+
+    FOR i = 1 TO 12
+        pageText = LayoutDeclaredPageName(i)
+        IF pageText = "" THEN EXIT FOR
+        IF pageText = targetText THEN
+            LayoutDeclaredPageIndex = i
+            EXIT FUNCTION
+        END IF
+    NEXT
+END FUNCTION
+
 SUB SelectTabFromBoundConfig()
     DIM i AS INTEGER
     DIM tabNumber AS INTEGER
@@ -17141,6 +17627,10 @@ FUNCTION ComboItemCacheKey(BYVAL elemIdx AS INTEGER) AS STRING
     keyText = keyText + ";ITEMS=" + uiElems(elemIdx).sourceItems
     keyText = keyText + ";DEPTH=" + STR$(LayoutSelectedDepthValue())
     keyText = keyText + ";CD=" + STR$(cfg.colorDepth)
+    IF effSourceKind = "FILES" OR effSourceKind = "COMBINED" THEN
+        keyText = keyText + ";SORT=" + FileBrowserSortMode(winIdx)
+        keyText = keyText + ";FMASK=" + UCASE$(FileBrowserMaskTextForWindow(winIdx))
+    END IF
 
     RETURN keyText
 END FUNCTION
@@ -17475,9 +17965,35 @@ SUB BuildComboItems(BYVAL elemIdx AS INTEGER)
     DIM comboCacheKeyText AS STRING
     DIM sourceIndexPath AS STRING
     DIM usedSourceIndex AS INTEGER
+    DIM buildWin AS INTEGER
+    DIM listAppPath AS STRING
+    DIM showDriveRows AS INTEGER
+    DIM showCurrentRow AS INTEGER
+    DIM driveScanStart AS INTEGER
+    DIM driveRoot AS STRING
+    DIM currentRoot AS STRING
+    DIM currentDirForDrives AS STRING
 
     IF elemIdx < 1 OR elemIdx > uiCount THEN EXIT SUB
     IF uiElems(elemIdx).kindKey <> "COMBO" AND uiElems(elemIdx).kindKey <> "LISTBOX" THEN EXIT SUB
+
+    buildWin = drawLayoutWindow
+    IF buildWin < LBOUND(layoutWindows) OR buildWin > UBOUND(layoutWindows) THEN buildWin = activeLayoutWindow
+    IF buildWin < LBOUND(layoutWindows) OR buildWin > UBOUND(layoutWindows) THEN buildWin = 0
+
+    listAppPath = ""
+    showDriveRows = -1
+    showCurrentRow = -1
+    driveScanStart = 65
+    IF buildWin >= LBOUND(layoutWindows) AND buildWin <= UBOUND(layoutWindows) THEN
+        IF layoutWindows(buildWin).used <> 0 THEN
+            listAppPath = RTRIM$(layoutWindows(buildWin).appPath)
+            showDriveRows = FileBrowserFlagEnabled(AppCfgValue(listAppPath, "FILE_BROWSER_DIR_SHOW_DRIVES", "YES"), -1)
+            showCurrentRow = FileBrowserFlagEnabled(AppCfgValue(listAppPath, "FILE_BROWSER_DIR_SHOW_CURRENT", "YES"), -1)
+            driveScanStart = VALINT(AppCfgValue(listAppPath, "FILE_BROWSER_DRIVE_SCAN_START", "65"))
+            IF driveScanStart < 65 OR driveScanStart > 90 THEN driveScanStart = 65
+        END IF
+    END IF
 
     comboCacheKeyText = ComboItemCacheKey(elemIdx)
     IF comboCacheKeyText <> "" THEN
@@ -17536,7 +18052,36 @@ SUB BuildComboItems(BYVAL elemIdx AS INTEGER)
 
     IF sourceKind <> "" THEN explorerSourceFlag = -1
 
-    IF sourceKind = "DIRS" OR sourceKind = "FILES" THEN
+    IF sourceKind = "DRIVES" THEN
+        currentDirForDrives = ""
+        IF TRIM$(uiElems(elemIdx).sourceControl) <> "" THEN currentDirForDrives = GetControlTextValue(uiElems(elemIdx).sourceControl)
+        IF TRIM$(currentDirForDrives) = "" THEN currentDirForDrives = FileBrowserWindowCurrentDir(buildWin)
+        currentDirForDrives = AbsoluteDirPath(currentDirForDrives)
+        currentRoot = FileBrowserRootPath(currentDirForDrives)
+
+        FOR i = driveScanStart TO 90
+            driveRoot = CHR$(i) + ":" + CHR$(92)
+            IF DriveRootAccessible(driveRoot) <> 0 THEN
+                IF tempComboItemCount < 256 THEN
+                    tempComboItemCount = tempComboItemCount + 1
+                    tempComboItems(tempComboItemCount) = CHR$(i) + ":"
+                    tempComboValues(tempComboItemCount) = "V:" + driveRoot
+                END IF
+            END IF
+        NEXT
+
+        IF tempComboItemCount = 0 AND DriveRootAccessible(currentRoot) <> 0 THEN
+            IF tempComboItemCount < 256 THEN
+                tempComboItemCount = tempComboItemCount + 1
+                tempComboItems(tempComboItemCount) = LEFT$(currentRoot, 2)
+                tempComboValues(tempComboItemCount) = "V:" + currentRoot
+            END IF
+        END IF
+
+        GOTO BuildComboItemsStore
+    END IF
+
+    IF sourceKind = "DIRS" OR sourceKind = "FILES" OR sourceKind = "COMBINED" THEN
         dirName = TRIM$(uiElems(elemIdx).sourceDir)
         IF dirName = "" THEN dirName = TRIM$(fileDlgDir)
         IF dirName = "" THEN dirName = "."
@@ -17546,11 +18091,12 @@ SUB BuildComboItems(BYVAL elemIdx AS INTEGER)
             dirName = NormalizePath(dirName)
         END IF
 
-        IF sourceKind = "DIRS" THEN
-            FOR i = 67 TO 90
+        IF sourceKind = "DIRS" OR sourceKind = "COMBINED" THEN
+            IF showDriveRows <> 0 THEN
+                FOR i = driveScanStart TO 90
                     dirFull = CHR$(i) + ":" + CHR$(92)
                     pattern = dirFull + "*.*"
-                    IF DirectoryHasAnyEntry(dirFull) <> 0 OR UCASE$(LEFT$(AbsoluteDirPath(dirName), 3)) = UCASE$(dirFull) THEN
+                    IF DriveRootAccessible(dirFull) <> 0 THEN
                         IF tempComboItemCount < 256 THEN
                             tempComboItemCount = tempComboItemCount + 1
                             tempComboItems(tempComboItemCount) = "[" + CHR$(i) + ":] " + dirFull
@@ -17558,12 +18104,15 @@ SUB BuildComboItems(BYVAL elemIdx AS INTEGER)
                         END IF
                     END IF
                 NEXT
+            END IF
 
-            IF tempComboItemCount < 256 THEN
-                tempComboItemCount = tempComboItemCount + 1
-                pathCaption = dirName
-                tempComboItems(tempComboItemCount) = pathCaption
-                tempComboValues(tempComboItemCount) = "D:" + dirName
+            IF showCurrentRow <> 0 THEN
+                IF tempComboItemCount < 256 THEN
+                    tempComboItemCount = tempComboItemCount + 1
+                    pathCaption = dirName
+                    tempComboItems(tempComboItemCount) = pathCaption
+                    tempComboValues(tempComboItemCount) = "D:" + dirName
+                END IF
             END IF
 
             parentName = ParentPath(dirName)
@@ -17608,7 +18157,13 @@ SUB BuildComboItems(BYVAL elemIdx AS INTEGER)
 
             SortTempComboItems sortStart, tempComboItemCount
 
-            GOTO BuildComboItemsStore
+            IF sourceKind = "DIRS" THEN GOTO BuildComboItemsStore
+        END IF
+
+        IF sourceKind = "COMBINED" THEN
+            sortStart = tempComboItemCount + 1
+        ELSE
+            sortStart = 1
         END IF
 
         pattern = dirName
@@ -17629,7 +18184,8 @@ SUB BuildComboItems(BYVAL elemIdx AS INTEGER)
             IF fname <> "." AND fname <> ".." THEN
                 fileFull = JoinPath(dirName, fname)
                 IF (navFileAttr AND &H10) = 0 THEN
-                    IF FileMatchesDialogMask(fileFull, uiElems(elemIdx).sourceMask) <> 0 THEN
+                    IF FileMatchesDialogMask(fileFull, uiElems(elemIdx).sourceMask) <> 0 AND _
+                       FileBrowserFileAllowedByMask(buildWin, fileFull) <> 0 THEN
                         tempComboItemCount = tempComboItemCount + 1
                         tempComboItems(tempComboItemCount) = FileNameOnly(fileFull)
                         tempComboValues(tempComboItemCount) = "F:" + fileFull
@@ -17639,7 +18195,7 @@ SUB BuildComboItems(BYVAL elemIdx AS INTEGER)
             fname = DIR(navFileAttr)
         LOOP
 
-        SortTempComboItems 1, tempComboItemCount
+        SortFileBrowserTempItems activeLayoutWindow, sortStart, tempComboItemCount
 
         GOTO BuildComboItemsStore
     END IF
@@ -17932,12 +18488,17 @@ SUB GetLayoutActivePage(BYREF activePage AS STRING)
         END IF
     NEXT
 
+    activePage = LayoutDeclaredPageName(uiSelectedTab)
+    IF activePage <> "" THEN EXIT SUB
+
     FOR i = 1 TO uiCount
         IF uiElems(i).kindId = UI_KIND_TAB THEN
             activePage = UCASE$(uiElems(i).text)
             EXIT SUB
         END IF
     NEXT
+
+    activePage = LayoutDeclaredPageName(1)
 END SUB
 
 SUB GetLayoutContentExtents(BYREF contentW AS INTEGER, BYREF contentH AS INTEGER)
@@ -18442,7 +19003,7 @@ FUNCTION ScrollListBoxAtMouse(BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER, 
     i = uiFocusIndex
     IF i >= 1 AND i <= uiCount THEN
         IF uiElems(i).kindId = UI_KIND_LISTBOX THEN
-            IF UCASE$(TRIM$(uiElems(i).sourceKind)) = "DIRS" OR UCASE$(TRIM$(uiElems(i).sourceKind)) = "FILES" THEN
+            IF UCASE$(TRIM$(uiElems(i).sourceKind)) = "DIRS" OR UCASE$(TRIM$(uiElems(i).sourceKind)) = "FILES" OR UCASE$(TRIM$(uiElems(i).sourceKind)) = "COMBINED" THEN
                 itemCount = ComboFastItemCount(i, listCacheSlot)
                 listRows = (uiElems(i).h - 4) \ 16
                 IF listRows < 1 THEN listRows = 1
@@ -18689,6 +19250,27 @@ FUNCTION LayoutKeyActionToken(BYVAL keyIn AS STRING) AS STRING
     END IF
 
     RETURN ""
+END FUNCTION
+
+FUNCTION LayoutAppKeyActionToken(BYVAL winIdx AS INTEGER, BYVAL keyIn AS STRING) AS STRING
+    DIM appPath AS STRING
+    DIM tokenMode AS STRING
+    DIM tokenText AS STRING
+
+    IF keyIn = "" THEN RETURN ""
+    IF winIdx >= LBOUND(layoutWindows) AND winIdx <= UBOUND(layoutWindows) THEN
+        IF layoutWindows(winIdx).used <> 0 THEN appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    END IF
+
+    tokenMode = UCASE$(TRIM$(AppCfgValue(appPath, "KEY_ACTION_TOKEN_MODE", "")))
+    IF tokenMode = "GENERIC" THEN
+        tokenText = UCASE$(TRIM$(KeyTokenFromInkey(keyIn)))
+        IF tokenText = "" THEN RETURN ""
+        IF TRIM$(AppCfgValue(appPath, "KEY_" + tokenText + "_ACTION", "")) <> "" THEN RETURN tokenText
+        RETURN ""
+    END IF
+
+    RETURN LayoutKeyActionToken(keyIn)
 END FUNCTION
 
 FUNCTION LayoutInteractiveKeyToken(BYVAL keyIn AS STRING) AS STRING
@@ -20115,6 +20697,334 @@ SUB RestoreWindowControlStates(BYVAL winIdx AS INTEGER, BYVAL oldSlot AS INTEGER
     IF activeLayoutWindow = winIdx THEN SyncGlobalsFromLayoutWindow winIdx
 END SUB
 
+
+FUNCTION LayoutPersistentStateFilePath(BYVAL appPath AS STRING) AS STRING
+    DIM appFile AS STRING
+    DIM appDir AS STRING
+    DIM appBase AS STRING
+
+    LayoutPersistentStateFilePath = ""
+    appFile = LayoutFilePath(NormalizePath(appPath))
+    IF appFile = "" THEN EXIT FUNCTION
+
+    appDir = ParentPath(appFile)
+    appBase = FileBaseNameNoExt(appFile)
+    IF appBase = "" THEN EXIT FUNCTION
+
+    IF appDir <> "" THEN
+        LayoutPersistentStateFilePath = appDir + CHR$(92) + appBase + ".STA"
+    ELSE
+        LayoutPersistentStateFilePath = appBase + ".STA"
+    END IF
+END FUNCTION
+
+FUNCTION LayoutPersistentStateEnabled(BYVAL appPath AS STRING) AS INTEGER
+    DIM flagText AS STRING
+    DIM i AS INTEGER
+
+    LayoutPersistentStateEnabled = 0
+    appPath = NormalizePath(appPath)
+    IF appPath = "" THEN EXIT FUNCTION
+
+    flagText = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_PAGE", "")))
+    IF flagText = "1" OR flagText = "YES" OR flagText = "TRUE" THEN
+        LayoutPersistentStateEnabled = -1
+        EXIT FUNCTION
+    END IF
+
+    flagText = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_ACTIVE_FILE_BROWSER", "")))
+    IF flagText = "1" OR flagText = "YES" OR flagText = "TRUE" THEN
+        LayoutPersistentStateEnabled = -1
+        EXIT FUNCTION
+    END IF
+
+    flagText = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_FILE_COLORS", "")))
+    IF flagText = "1" OR flagText = "YES" OR flagText = "TRUE" THEN
+        LayoutPersistentStateEnabled = -1
+        EXIT FUNCTION
+    END IF
+
+    flagText = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_FILE_SORT", "")))
+    IF flagText = "1" OR flagText = "YES" OR flagText = "TRUE" THEN
+        LayoutPersistentStateEnabled = -1
+        EXIT FUNCTION
+    END IF
+
+    flagText = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_FILE_MASK", "")))
+    IF flagText = "1" OR flagText = "YES" OR flagText = "TRUE" THEN
+        LayoutPersistentStateEnabled = -1
+        EXIT FUNCTION
+    END IF
+
+    FOR i = 1 TO 32
+        IF TRIM$(AppCfgValue(appPath, "STATE_CONTROL_" + LTRIM$(STR$(i)), "")) <> "" THEN
+            LayoutPersistentStateEnabled = -1
+            EXIT FUNCTION
+        END IF
+    NEXT
+END FUNCTION
+
+SUB LayoutRefreshPersistentFileBrowserState(BYVAL winIdx AS INTEGER)
+    DIM primaryDirControl AS STRING
+    DIM primaryFileControl AS STRING
+    DIM primaryPathControl AS STRING
+    DIM statsControlName AS STRING
+    DIM primaryDirIdx AS INTEGER
+    DIM primaryFileIdx AS INTEGER
+    DIM pathIdx AS INTEGER
+    DIM listIdx AS INTEGER
+    DIM listName AS STRING
+    DIM pathControlName AS STRING
+    DIM dirName AS STRING
+    DIM doPrimaryRefresh AS INTEGER
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+
+    activeLayoutWindow = winIdx
+    SyncGlobalsFromLayoutWindow winIdx
+
+    primaryDirControl = AppControlNameValue(winIdx, "FILE_BROWSER_DIR_CONTROL", "")
+    primaryFileControl = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+    primaryPathControl = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL", "")
+    statsControlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATS_CONTROL", "")
+
+    doPrimaryRefresh = 0
+    primaryDirIdx = GetControlIndexByName(primaryDirControl)
+    primaryFileIdx = GetControlIndexByName(primaryFileControl)
+    IF primaryDirIdx >= 1 AND primaryDirIdx <= uiCount THEN
+        IF FileBrowserListIsVisibleOnCurrentPage(primaryDirIdx) <> 0 THEN doPrimaryRefresh = -1
+    END IF
+    IF primaryFileIdx >= 1 AND primaryFileIdx <= uiCount THEN
+        IF FileBrowserListIsVisibleOnCurrentPage(primaryFileIdx) <> 0 THEN doPrimaryRefresh = -1
+    END IF
+
+    IF doPrimaryRefresh <> 0 THEN
+        dirName = ""
+        IF primaryPathControl <> "" THEN
+            pathIdx = GetControlIndexByName(primaryPathControl)
+            IF pathIdx >= 1 AND pathIdx <= uiCount THEN
+                IF uiElems(pathIdx).kindId = UI_KIND_TEXTBOX THEN dirName = uiEdit(pathIdx).txt
+            END IF
+        END IF
+        IF dirName = "" THEN dirName = "."
+        ConfigureFileBrowserWindow winIdx, dirName
+        SyncGlobalsFromLayoutWindow winIdx
+    END IF
+
+    FOR listIdx = 1 TO uiCount
+        IF FileBrowserListIsBrowserList(listIdx) <> 0 THEN
+            IF FileBrowserListIsVisibleOnCurrentPage(listIdx) <> 0 THEN
+                listName = TRIM$(uiElems(listIdx).name)
+                IF UCASE$(listName) <> UCASE$(primaryDirControl) AND UCASE$(listName) <> UCASE$(primaryFileControl) THEN
+                    pathControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL_" + UCASE$(listName), "")
+                    IF pathControlName <> "" THEN
+                        dirName = ""
+                        pathIdx = GetControlIndexByName(pathControlName)
+                        IF pathIdx >= 1 AND pathIdx <= uiCount THEN
+                            IF uiElems(pathIdx).kindId = UI_KIND_TEXTBOX THEN dirName = uiEdit(pathIdx).txt
+                        END IF
+                        IF dirName = "" THEN dirName = "."
+                        ConfigureFileBrowserPane winIdx, listName, pathControlName, statsControlName, dirName
+                        SyncGlobalsFromLayoutWindow winIdx
+                    END IF
+                END IF
+            END IF
+        END IF
+    NEXT
+
+    FileBrowserEnsureActiveListForPage winIdx
+    SyncLayoutWindowFromGlobals winIdx
+END SUB
+
+SUB LayoutApplyPersistentState(BYVAL winIdx AS INTEGER)
+    DIM appPath AS STRING
+    DIM statePath AS STRING
+    DIM marker AS STRING
+    DIM pageText AS STRING
+    DIM stateFlag AS STRING
+    DIM pageIdx AS INTEGER
+    DIM savedTab AS INTEGER
+    DIM controlName AS STRING
+    DIM controlKey AS STRING
+    DIM controlValue AS STRING
+    DIM controlIdx AS INTEGER
+    DIM activeName AS STRING
+    DIM i AS INTEGER
+    DIM pageChanged AS INTEGER
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    IF LayoutPersistentStateEnabled(appPath) = 0 THEN EXIT SUB
+
+    statePath = LayoutPersistentStateFilePath(appPath)
+    IF statePath = "" THEN EXIT SUB
+    IF DIR(statePath) = "" THEN EXIT SUB
+
+    activeLayoutWindow = winIdx
+    SyncGlobalsFromLayoutWindow winIdx
+    marker = CHR$(2)
+    pageChanged = 0
+
+    stateFlag = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_PAGE", "")))
+    IF stateFlag = "1" OR stateFlag = "YES" OR stateFlag = "TRUE" THEN
+        pageText = UCASE$(TRIM$(ReadCfgValueNoCache(statePath, "PAGE", "")))
+        pageIdx = 0
+        IF pageText <> "" THEN pageIdx = LayoutDeclaredPageIndex(pageText)
+        IF pageIdx = 0 THEN
+            savedTab = VALINT(ReadCfgValueNoCache(statePath, "SELECTED_TAB", "0"))
+            IF savedTab >= 1 AND savedTab <= 12 THEN
+                IF LayoutDeclaredPageName(savedTab) <> "" THEN pageIdx = savedTab
+            END IF
+        END IF
+        IF pageIdx >= 1 AND pageIdx <= 12 THEN
+            IF uiSelectedTab <> pageIdx THEN
+                uiSelectedTab = pageIdx
+                layoutWindows(winIdx).selectedTab = uiSelectedTab
+                pageChanged = -1
+            END IF
+        END IF
+    END IF
+
+    IF pageChanged <> 0 THEN
+        IF LayoutHasPageFiles() <> 0 THEN RefreshLayoutPageControls
+    END IF
+
+    FOR i = 1 TO 32
+        controlName = TRIM$(AppCfgValue(appPath, "STATE_CONTROL_" + LTRIM$(STR$(i)), ""))
+        IF controlName <> "" THEN
+            controlKey = "CONTROL_" + UCASE$(controlName)
+            controlValue = ReadCfgValueNoCache(statePath, controlKey, marker)
+            IF controlValue <> marker THEN
+                controlIdx = GetControlIndexByName(controlName)
+                IF controlIdx >= 1 AND controlIdx <= uiCount THEN
+                    SELECT CASE uiElems(controlIdx).kindId
+                    CASE UI_KIND_TEXTBOX
+                        Ed_SetTextGlue uiEdit(controlIdx), controlValue, uiElems(controlIdx).text, 0
+                        InvalidateTextboxMetrics controlIdx
+                    CASE ELSE
+                        uiElems(controlIdx).text = controlValue
+                    END SELECT
+                    layoutUiElems(winIdx, controlIdx) = uiElems(controlIdx)
+                    IF uiElems(controlIdx).kindId = UI_KIND_TEXTBOX THEN layoutUiEdit(winIdx, controlIdx) = uiEdit(controlIdx)
+                    MarkLayoutDirtyElement winIdx, controlIdx
+                END IF
+            END IF
+        END IF
+    NEXT
+
+    stateFlag = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_FILE_SORT", "")))
+    IF stateFlag = "1" OR stateFlag = "YES" OR stateFlag = "TRUE" THEN
+        layoutFileBrowserSortMode(winIdx) = FileBrowserNormalizeSortMode(ReadCfgValueNoCache(statePath, "FILE_SORT_MODE", AppCfgValue(appPath, "FILE_BROWSER_SORT_DEFAULT", "NAME")))
+    END IF
+
+    stateFlag = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_FILE_MASK", "")))
+    IF stateFlag = "1" OR stateFlag = "YES" OR stateFlag = "TRUE" THEN
+        layoutFileBrowserMaskText(winIdx) = FileBrowserNormalizeMaskText(ReadCfgValueNoCache(statePath, "FILE_MASK", AppCfgValue(appPath, "FILE_BROWSER_MASK_DEFAULT", "")))
+    END IF
+
+    SyncLayoutWindowFromGlobals winIdx
+    LayoutRefreshPersistentFileBrowserState winIdx
+
+    stateFlag = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_ACTIVE_FILE_BROWSER", "")))
+    IF stateFlag = "1" OR stateFlag = "YES" OR stateFlag = "TRUE" THEN
+        activeName = TRIM$(ReadCfgValueNoCache(statePath, "ACTIVE_FILE_BROWSER", ""))
+        IF activeName <> "" THEN FileBrowserSetActiveListByName winIdx, activeName
+    END IF
+
+    stateFlag = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_FILE_COLORS", "")))
+    IF stateFlag = "1" OR stateFlag = "YES" OR stateFlag = "TRUE" THEN
+        stateFlag = ReadCfgValueNoCache(statePath, "FILE_COLORS_ENABLED", AppCfgValue(appPath, "FILE_BROWSER_COLORS_DEFAULT", "YES"))
+        layoutFileBrowserColorsEnabled(winIdx) = FileBrowserFlagEnabled(stateFlag, -1)
+        layoutFileBrowserColorsReady(winIdx) = -1
+    END IF
+
+    FileBrowserEnsureActiveListForPage winIdx
+    MarkLayoutWindowVisualDirty winIdx
+    SyncLayoutWindowFromGlobals winIdx
+END SUB
+
+SUB LayoutSavePersistentState(BYVAL winIdx AS INTEGER)
+    DIM appPath AS STRING
+    DIM statePath AS STRING
+    DIM stateText AS STRING
+    DIM eol AS STRING
+    DIM pageText AS STRING
+    DIM stateFlag AS STRING
+    DIM controlName AS STRING
+    DIM controlIdx AS INTEGER
+    DIM controlValue AS STRING
+    DIM i AS INTEGER
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    IF LayoutPersistentStateEnabled(appPath) = 0 THEN EXIT SUB
+
+    IF activeLayoutWindow = winIdx THEN SyncLayoutWindowFromGlobals winIdx
+
+    statePath = LayoutPersistentStateFilePath(appPath)
+    IF statePath = "" THEN EXIT SUB
+
+    eol = CHR$(13) + CHR$(10)
+    stateText = "VERSION=1" + eol
+
+    stateFlag = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_PAGE", "")))
+    IF stateFlag = "1" OR stateFlag = "YES" OR stateFlag = "TRUE" THEN
+        pageText = LayoutDeclaredPageName(layoutWindows(winIdx).selectedTab)
+        IF pageText = "" THEN pageText = LTRIM$(STR$(layoutWindows(winIdx).selectedTab))
+        stateText = stateText + "PAGE=" + pageText + eol
+        stateText = stateText + "SELECTED_TAB=" + LTRIM$(STR$(layoutWindows(winIdx).selectedTab)) + eol
+    END IF
+
+    stateFlag = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_ACTIVE_FILE_BROWSER", "")))
+    IF stateFlag = "1" OR stateFlag = "YES" OR stateFlag = "TRUE" THEN
+        stateText = stateText + "ACTIVE_FILE_BROWSER=" + TRIM$(layoutFileBrowserActiveList(winIdx)) + eol
+    END IF
+
+    stateFlag = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_FILE_SORT", "")))
+    IF stateFlag = "1" OR stateFlag = "YES" OR stateFlag = "TRUE" THEN
+        stateText = stateText + "FILE_SORT_MODE=" + FileBrowserSortMode(winIdx) + eol
+    END IF
+
+    stateFlag = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_FILE_MASK", "")))
+    IF stateFlag = "1" OR stateFlag = "YES" OR stateFlag = "TRUE" THEN
+        stateText = stateText + "FILE_MASK=" + FileBrowserMaskTextForWindow(winIdx) + eol
+    END IF
+
+    stateFlag = UCASE$(TRIM$(AppCfgValue(appPath, "STATE_FILE_COLORS", "")))
+    IF stateFlag = "1" OR stateFlag = "YES" OR stateFlag = "TRUE" THEN
+        FileBrowserInitColorState winIdx
+        IF layoutFileBrowserColorsEnabled(winIdx) <> 0 THEN
+            stateText = stateText + "FILE_COLORS_ENABLED=YES" + eol
+        ELSE
+            stateText = stateText + "FILE_COLORS_ENABLED=NO" + eol
+        END IF
+    END IF
+
+    FOR i = 1 TO 32
+        controlName = TRIM$(AppCfgValue(appPath, "STATE_CONTROL_" + LTRIM$(STR$(i)), ""))
+        IF controlName <> "" THEN
+            controlIdx = LayoutControlIndexByName(winIdx, controlName)
+            IF controlIdx >= 1 AND controlIdx <= layoutUiCount(winIdx) THEN
+                SELECT CASE layoutUiElems(winIdx, controlIdx).kindId
+                CASE UI_KIND_TEXTBOX
+                    controlValue = layoutUiEdit(winIdx, controlIdx).txt
+                CASE ELSE
+                    controlValue = RTRIM$(layoutUiElems(winIdx, controlIdx).text)
+                END SELECT
+                stateText = stateText + "CONTROL_" + UCASE$(controlName) + "=" + controlValue + eol
+            END IF
+        END IF
+    NEXT
+
+    IF DIR(statePath) <> "" THEN KILL statePath
+    IF WriteTextFileRaw(statePath, stateText) <> 0 THEN InvalidateCfgReadCacheForFile statePath
+END SUB
+
 SUB RunWindowSessionRestoreAction(BYVAL winIdx AS INTEGER)
     DIM appPath AS STRING
     DIM restoreAction AS STRING
@@ -20525,6 +21435,7 @@ SUB ApplyVerticalSplitterPosition(BYVAL splitterIdx AS INTEGER, BYVAL newSplitX 
     DIM minRightPx AS INTEGER
     DIM minX AS INTEGER
     DIM maxX AS INTEGER
+    DIM deltaW AS INTEGER
 
     IF splitterIdx < 1 OR splitterIdx > uiCount THEN EXIT SUB
     IF uiElems(splitterIdx).kindId <> UI_KIND_SPLITTER THEN EXIT SUB
@@ -20573,6 +21484,43 @@ SUB ApplyVerticalSplitterPosition(BYVAL splitterIdx AS INTEGER, BYVAL newSplitX 
         labelIdx = GetControlIndexByName(labelName)
         IF labelIdx >= 1 AND labelIdx <= uiCount THEN
             uiElems(labelIdx).x = uiElems(rightIdx).x
+        END IF
+    END IF
+
+    ' Keep splitter geometry as the new layout base so auto-fit does not move the far pane edge.
+    deltaW = 0
+    IF uiDesignW > 0 THEN deltaW = uiWinW - uiDesignW
+
+    uiElems(splitterIdx).baseX = uiElems(splitterIdx).x
+    uiElems(splitterIdx).baseW = uiElems(splitterIdx).w
+
+    IF uiElems(leftIdx).moveX <> 0 THEN
+        uiElems(leftIdx).baseX = uiElems(leftIdx).x - deltaW
+    ELSE
+        uiElems(leftIdx).baseX = uiElems(leftIdx).x
+    END IF
+    IF uiElems(leftIdx).growW <> 0 THEN
+        uiElems(leftIdx).baseW = uiElems(leftIdx).w - deltaW
+    ELSE
+        uiElems(leftIdx).baseW = uiElems(leftIdx).w
+    END IF
+
+    IF uiElems(rightIdx).moveX <> 0 THEN
+        uiElems(rightIdx).baseX = uiElems(rightIdx).x - deltaW
+    ELSE
+        uiElems(rightIdx).baseX = uiElems(rightIdx).x
+    END IF
+    IF uiElems(rightIdx).growW <> 0 THEN
+        uiElems(rightIdx).baseW = uiElems(rightIdx).w - deltaW
+    ELSE
+        uiElems(rightIdx).baseW = uiElems(rightIdx).w
+    END IF
+
+    IF labelIdx >= 1 AND labelIdx <= uiCount THEN
+        IF uiElems(labelIdx).moveX <> 0 THEN
+            uiElems(labelIdx).baseX = uiElems(labelIdx).x - deltaW
+        ELSE
+            uiElems(labelIdx).baseX = uiElems(labelIdx).x
         END IF
     END IF
 
@@ -20679,6 +21627,27 @@ FUNCTION DirectoryHasAnyEntry(BYVAL dirPath AS STRING) AS INTEGER
     IF DIR(pattern) <> "" THEN RETURN -1
 
     RETURN 0
+END FUNCTION
+
+FUNCTION DriveRootAccessible(BYVAL driveRoot AS STRING) AS INTEGER
+    DIM regs AS __dpmi_regs
+    DIM driveNum AS INTEGER
+    DIM driveLetter AS STRING
+
+    driveRoot = UCASE$(TRIM$(driveRoot))
+    IF LEN(driveRoot) < 2 THEN RETURN 0
+    IF MID$(driveRoot, 2, 1) <> ":" THEN RETURN 0
+
+    driveLetter = LEFT$(driveRoot, 1)
+    driveNum = ASC(driveLetter) - ASC("A") + 1
+    IF driveNum < 1 OR driveNum > 26 THEN RETURN 0
+
+    regs.x.ax = &H3600
+    regs.x.dx = driveNum
+    __dpmi_int( &H21, @regs )
+
+    IF regs.x.ax = &HFFFF THEN RETURN 0
+    RETURN -1
 END FUNCTION
 
 
@@ -20866,7 +21835,7 @@ FUNCTION AppDialogPath(BYVAL winIdx AS INTEGER, BYVAL keyName AS STRING, BYVAL d
     IF winIdx >= LBOUND(layoutWindows) AND winIdx <= UBOUND(layoutWindows) THEN
         IF layoutWindows(winIdx).used <> 0 THEN
             dlgPath = TRIM$(AppCfgValue(RTRIM$(layoutWindows(winIdx).appPath), keyName, dlgPath))
-            dlgPath = ResolvePathFromAppWindow(winIdx, dlgPath)
+            dlgPath = ResolveAppLocalFilePath(winIdx, dlgPath)
         END IF
     END IF
 
@@ -21172,6 +22141,1043 @@ SUB ConfigureNewFileDialogWindow(BYVAL dlgWin AS INTEGER)
 END SUB
 
 
+' File-browser panes keep their active list separate from generic focus, because menu clicks clear focus before actions run.
+FUNCTION FileBrowserListIsBrowserList(BYVAL elemIdx AS INTEGER) AS INTEGER
+    FileBrowserListIsBrowserList = 0
+    IF elemIdx < 1 OR elemIdx > uiCount THEN EXIT FUNCTION
+    IF uiElems(elemIdx).kindId <> UI_KIND_LISTBOX THEN EXIT FUNCTION
+    IF uiElems(elemIdx).sourceKindId = UI_SOURCE_DIRS OR uiElems(elemIdx).sourceKindId = UI_SOURCE_FILES OR uiElems(elemIdx).sourceKindId = UI_SOURCE_COMBINED THEN FileBrowserListIsBrowserList = -1
+END FUNCTION
+
+FUNCTION FileBrowserListKindMatches(BYVAL elemIdx AS INTEGER, BYVAL preferDirs AS INTEGER) AS INTEGER
+    FileBrowserListKindMatches = 0
+    IF FileBrowserListIsBrowserList(elemIdx) = 0 THEN EXIT FUNCTION
+    IF preferDirs = 2 THEN
+        FileBrowserListKindMatches = -1
+    ELSEIF preferDirs <> 0 THEN
+        IF uiElems(elemIdx).sourceKindId = UI_SOURCE_DIRS OR uiElems(elemIdx).sourceKindId = UI_SOURCE_COMBINED THEN FileBrowserListKindMatches = -1
+    ELSE
+        IF uiElems(elemIdx).sourceKindId = UI_SOURCE_FILES OR uiElems(elemIdx).sourceKindId = UI_SOURCE_COMBINED THEN FileBrowserListKindMatches = -1
+    END IF
+END FUNCTION
+
+FUNCTION FileBrowserListIsVisibleOnCurrentPage(BYVAL elemIdx AS INTEGER) AS INTEGER
+    DIM activePage AS STRING
+
+    FileBrowserListIsVisibleOnCurrentPage = 0
+    IF elemIdx < 1 OR elemIdx > uiCount THEN EXIT FUNCTION
+    IF TRIM$(uiElems(elemIdx).page) = "" THEN
+        FileBrowserListIsVisibleOnCurrentPage = -1
+        EXIT FUNCTION
+    END IF
+
+    GetLayoutActivePage activePage
+    IF UCASE$(TRIM$(uiElems(elemIdx).pageKey)) = UCASE$(TRIM$(activePage)) THEN FileBrowserListIsVisibleOnCurrentPage = -1
+END FUNCTION
+
+SUB FileBrowserSetActiveListByName(BYVAL winIdx AS INTEGER, BYVAL listControlName AS STRING)
+    DIM listIdx AS INTEGER
+    DIM oldIdx AS INTEGER
+    DIM oldName AS STRING
+    DIM newName AS STRING
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+
+    newName = TRIM$(listControlName)
+    IF newName = "" THEN EXIT SUB
+    listIdx = GetControlIndexByName(newName)
+    IF FileBrowserListIsBrowserList(listIdx) = 0 THEN EXIT SUB
+    IF FileBrowserListIsVisibleOnCurrentPage(listIdx) = 0 THEN EXIT SUB
+
+    newName = TRIM$(uiElems(listIdx).name)
+    oldName = TRIM$(layoutFileBrowserActiveList(winIdx))
+    IF UCASE$(oldName) = UCASE$(newName) THEN EXIT SUB
+
+    oldIdx = GetControlIndexByName(oldName)
+    layoutFileBrowserActiveList(winIdx) = newName
+
+    IF oldIdx >= 1 AND oldIdx <= uiCount THEN
+        IF FileBrowserListIsBrowserList(oldIdx) <> 0 THEN MarkLayoutDirtyElement winIdx, oldIdx
+    END IF
+    MarkLayoutDirtyElement winIdx, listIdx
+END SUB
+
+SUB FileBrowserSetActiveListByIndex(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER)
+    IF elemIdx < 1 OR elemIdx > uiCount THEN EXIT SUB
+    FileBrowserSetActiveListByName winIdx, uiElems(elemIdx).name
+END SUB
+
+FUNCTION FileBrowserListIsActive(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER) AS INTEGER
+    FileBrowserListIsActive = 0
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT FUNCTION
+    IF layoutWindows(winIdx).used = 0 THEN EXIT FUNCTION
+    IF elemIdx < 1 OR elemIdx > uiCount THEN EXIT FUNCTION
+    IF FileBrowserListIsBrowserList(elemIdx) = 0 THEN EXIT FUNCTION
+    IF TRIM$(layoutFileBrowserActiveList(winIdx)) = "" THEN EXIT FUNCTION
+    IF UCASE$(TRIM$(layoutFileBrowserActiveList(winIdx))) = UCASE$(TRIM$(uiElems(elemIdx).name)) THEN FileBrowserListIsActive = -1
+END FUNCTION
+
+FUNCTION FileBrowserActivePaneFrameColor() AS UINTEGER
+    ' Match the active pane frame to the current title bar theme color.
+    IF cfg.colorDepth <= 8 THEN RETURN uiStyle.titleActiveCol
+    RETURN MakeCol(theme.titlebarGradR, theme.titlebarGradG, theme.titlebarGradB)
+END FUNCTION
+
+FUNCTION FileBrowserColorsConfigPath(BYVAL winIdx AS INTEGER) AS STRING
+    DIM appPath AS STRING
+    DIM cfgSpec AS STRING
+
+    FileBrowserColorsConfigPath = ""
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT FUNCTION
+    IF layoutWindows(winIdx).used = 0 THEN EXIT FUNCTION
+
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    cfgSpec = TRIM$(AppCfgValue(appPath, "FILE_BROWSER_COLORS_CFG", ""))
+    IF cfgSpec = "" THEN EXIT FUNCTION
+
+    FileBrowserColorsConfigPath = ResolveAppLocalFilePath(winIdx, cfgSpec)
+END FUNCTION
+
+FUNCTION FileBrowserFlagEnabled(BYVAL flagText AS STRING, BYVAL defaultEnabled AS INTEGER) AS INTEGER
+    flagText = UCASE$(TRIM$(flagText))
+    IF flagText = "" THEN RETURN defaultEnabled
+    IF flagText = "1" OR flagText = "YES" OR flagText = "TRUE" OR flagText = "ON" THEN RETURN -1
+    IF flagText = "0" OR flagText = "NO" OR flagText = "FALSE" OR flagText = "OFF" THEN RETURN 0
+    RETURN defaultEnabled
+END FUNCTION
+
+SUB FileBrowserInitColorState(BYVAL winIdx AS INTEGER)
+    DIM appPath AS STRING
+    DIM defaultFlag AS STRING
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+    IF layoutFileBrowserColorsReady(winIdx) <> 0 THEN EXIT SUB
+
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    defaultFlag = AppCfgValue(appPath, "FILE_BROWSER_COLORS_DEFAULT", "YES")
+    layoutFileBrowserColorsEnabled(winIdx) = FileBrowserFlagEnabled(defaultFlag, -1)
+    layoutFileBrowserColorsReady(winIdx) = -1
+END SUB
+
+FUNCTION FileBrowserColorsEnabled(BYVAL winIdx AS INTEGER) AS INTEGER
+    FileBrowserColorsEnabled = 0
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT FUNCTION
+    IF layoutWindows(winIdx).used = 0 THEN EXIT FUNCTION
+    IF FileBrowserColorsConfigPath(winIdx) = "" THEN EXIT FUNCTION
+
+    FileBrowserInitColorState winIdx
+    IF layoutFileBrowserColorsEnabled(winIdx) <> 0 THEN FileBrowserColorsEnabled = -1
+END FUNCTION
+
+FUNCTION FileBrowserRgbTextToColor(BYVAL rgbText AS STRING, BYVAL fallbackCol AS UINTEGER) AS UINTEGER
+    DIM p1 AS INTEGER
+    DIM p2 AS INTEGER
+    DIM r AS INTEGER
+    DIM g AS INTEGER
+    DIM b AS INTEGER
+
+    rgbText = TRIM$(rgbText)
+    p1 = INSTR(rgbText, ",")
+    IF p1 <= 0 THEN RETURN fallbackCol
+    p2 = INSTR(p1 + 1, rgbText, ",")
+    IF p2 <= p1 THEN RETURN fallbackCol
+
+    r = ClampI(VALINT(TRIM$(LEFT$(rgbText, p1 - 1))), 0, 255)
+    g = ClampI(VALINT(TRIM$(MID$(rgbText, p1 + 1, p2 - p1 - 1))), 0, 255)
+    b = ClampI(VALINT(TRIM$(MID$(rgbText, p2 + 1))), 0, 255)
+
+    IF cfg.colorDepth = 4 THEN RETURN Backlash16ColorIndex(r, g, b)
+    IF cfg.colorDepth = 8 THEN RETURN Backlash256ColorIndex(r, g, b)
+    RETURN RGB(r, g, b)
+END FUNCTION
+
+SUB FileBrowserLoadExtensionColors(BYVAL winIdx AS INTEGER)
+    DIM cfgPath AS STRING
+    DIM diskPath AS STRING
+    DIM stampValue AS DOUBLE
+    DIM f AS INTEGER
+    DIM rawLine AS STRING
+    DIM lineText AS STRING
+    DIM eqPos AS INTEGER
+    DIM extName AS STRING
+    DIM rgbText AS STRING
+
+    cfgPath = FileBrowserColorsConfigPath(winIdx)
+    diskPath = LayoutFilePath(NormalizePath(cfgPath))
+    IF diskPath = "" THEN
+        fileBrowserColorCount = 0
+        fileBrowserColorCachePath = ""
+        fileBrowserColorCacheStamp = 0
+        fileBrowserColorCacheDepth = cfg.colorDepth
+        EXIT SUB
+    END IF
+
+    stampValue = 0
+    IF DIR(diskPath) <> "" THEN stampValue = FileDateTime(diskPath)
+    IF UCASE$(fileBrowserColorCachePath) = UCASE$(diskPath) AND _
+       fileBrowserColorCacheStamp = stampValue AND _
+       fileBrowserColorCacheDepth = cfg.colorDepth THEN EXIT SUB
+
+    fileBrowserColorCachePath = diskPath
+    fileBrowserColorCacheStamp = stampValue
+    fileBrowserColorCacheDepth = cfg.colorDepth
+    fileBrowserColorCount = 0
+
+    IF DIR(diskPath) = "" THEN EXIT SUB
+    f = FREEFILE
+    IF OPEN(diskPath FOR INPUT AS #f) <> 0 THEN EXIT SUB
+
+    DO WHILE EOF(f) = 0 AND fileBrowserColorCount < FILE_BROWSER_COLOR_MAX
+        LINE INPUT #f, rawLine
+        lineText = TRIM$(rawLine)
+        IF lineText <> "" THEN
+            IF LEFT$(lineText, 1) <> ";" AND LEFT$(lineText, 1) <> "#" THEN
+                eqPos = INSTR(lineText, "=")
+                IF eqPos > 1 THEN
+                    extName = UCASE$(TRIM$(LEFT$(lineText, eqPos - 1)))
+                    rgbText = TRIM$(MID$(lineText, eqPos + 1))
+                    IF LEFT$(extName, 1) = "." THEN extName = MID$(extName, 2)
+                    IF extName <> "" THEN
+                        fileBrowserColorCount = fileBrowserColorCount + 1
+                        fileBrowserColorExt(fileBrowserColorCount) = extName
+                        fileBrowserColorCol(fileBrowserColorCount) = FileBrowserRgbTextToColor(rgbText, COL_TEXT)
+                    END IF
+                END IF
+            END IF
+        END IF
+    LOOP
+
+    CLOSE #f
+END SUB
+
+FUNCTION FileBrowserRowTextColor(BYVAL winIdx AS INTEGER, BYVAL itemValue AS STRING) AS UINTEGER
+    DIM itemPath AS STRING
+    DIM extName AS STRING
+    DIM i AS INTEGER
+
+    FileBrowserRowTextColor = COL_TEXT
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT FUNCTION
+    IF layoutWindows(winIdx).used = 0 THEN EXIT FUNCTION
+
+    FileBrowserInitColorState winIdx
+    IF layoutFileBrowserColorsEnabled(winIdx) = 0 THEN EXIT FUNCTION
+    IF fileBrowserColorCount <= 0 THEN EXIT FUNCTION
+    IF LEFT$(UCASE$(RTRIM$(itemValue)), 2) <> "F:" THEN EXIT FUNCTION
+
+    itemPath = MID$(RTRIM$(itemValue), 3)
+    extName = UCASE$(FileExtensionOf(itemPath))
+    IF extName = "" THEN EXIT FUNCTION
+
+    FOR i = 1 TO fileBrowserColorCount
+        IF fileBrowserColorExt(i) = extName THEN
+            FileBrowserRowTextColor = fileBrowserColorCol(i)
+            EXIT FUNCTION
+        END IF
+    NEXT
+END FUNCTION
+
+SUB FileBrowserToggleColors(BYVAL winIdx AS INTEGER, BYVAL statusControlName AS STRING)
+    DIM i AS INTEGER
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+
+    FileBrowserInitColorState winIdx
+    IF layoutFileBrowserColorsEnabled(winIdx) <> 0 THEN
+        layoutFileBrowserColorsEnabled(winIdx) = 0
+        IF statusControlName <> "" THEN SetTextboxTextByName statusControlName, "Extension colors off"
+    ELSE
+        layoutFileBrowserColorsEnabled(winIdx) = -1
+        IF statusControlName <> "" THEN SetTextboxTextByName statusControlName, "Extension colors on"
+    END IF
+
+    ' Color toggle changes row paint, so invalidate visible file-list caches now.
+    FOR i = 1 TO uiCount
+        IF uiElems(i).sourceKindId = UI_SOURCE_FILES OR uiElems(i).sourceKindId = UI_SOURCE_COMBINED THEN
+            MarkLayoutDirtyElement winIdx, i
+        END IF
+    NEXT
+
+    MarkLayoutWindowVisualDirty winIdx
+    SyncLayoutWindowFromGlobals winIdx
+    LayoutSavePersistentState winIdx
+END SUB
+
+FUNCTION FileBrowserNormalizeSortMode(BYVAL sortText AS STRING) AS STRING
+    sortText = UCASE$(TRIM$(sortText))
+    IF sortText = "EXT" THEN sortText = "EXTENSION"
+    SELECT CASE sortText
+    CASE "EXTENSION"
+        RETURN "EXTENSION"
+    CASE "SIZE"
+        RETURN "SIZE"
+    CASE "DATE"
+        RETURN "DATE"
+    CASE ELSE
+        RETURN "NAME"
+    END SELECT
+END FUNCTION
+
+FUNCTION FileBrowserSortMode(BYVAL winIdx AS INTEGER) AS STRING
+    DIM appPath AS STRING
+    DIM sortText AS STRING
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN RETURN "NAME"
+    IF layoutWindows(winIdx).used = 0 THEN RETURN "NAME"
+
+    sortText = FileBrowserNormalizeSortMode(layoutFileBrowserSortMode(winIdx))
+    IF TRIM$(layoutFileBrowserSortMode(winIdx)) <> "" THEN RETURN sortText
+
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    sortText = FileBrowserNormalizeSortMode(AppCfgValue(appPath, "FILE_BROWSER_SORT_DEFAULT", "NAME"))
+    layoutFileBrowserSortMode(winIdx) = sortText
+    RETURN sortText
+END FUNCTION
+
+FUNCTION FileBrowserSortPaddedLong(BYVAL n AS LONGINT) AS STRING
+    DIM t AS STRING
+
+    IF n < 0 THEN n = 0
+    t = LTRIM$(STR$(n))
+    RETURN RIGHT$("00000000000000000000" + t, 20)
+END FUNCTION
+
+FUNCTION FileBrowserSortKey(BYVAL winIdx AS INTEGER, BYVAL itemText AS STRING, BYVAL itemValue AS STRING) AS STRING
+    DIM modeText AS STRING
+    DIM itemPath AS STRING
+    DIM itemName AS STRING
+    DIM extName AS STRING
+    DIM sortDateStamp AS DOUBLE
+    DIM dateText AS STRING
+
+    itemText = UCASE$(RTRIM$(itemText))
+    itemValue = RTRIM$(itemValue)
+
+    IF LEFT$(UCASE$(itemValue), 2) <> "F:" THEN RETURN itemText
+
+    itemPath = NormalizePath(TRIM$(MID$(itemValue, 3)))
+    itemName = UCASE$(FileNameOnly(itemPath))
+    IF itemName = "" THEN itemName = UCASE$(itemPath)
+
+    modeText = FileBrowserSortMode(winIdx)
+    SELECT CASE modeText
+    CASE "EXTENSION"
+        extName = UCASE$(FileExtensionOf(itemPath))
+        RETURN extName + CHR$(1) + itemName
+    CASE "SIZE"
+        RETURN FileBrowserSortPaddedLong(FileSizeBytes(itemPath)) + CHR$(1) + itemName
+    CASE "DATE"
+        sortDateStamp = FileDateTime(itemPath)
+        IF sortDateStamp > 0 THEN
+            dateText = FORMAT(sortDateStamp, "yyyy-mm-dd")
+        ELSE
+            dateText = "0000-00-00"
+        END IF
+        RETURN dateText + CHR$(1) + itemName
+    CASE ELSE
+        RETURN itemName
+    END SELECT
+END FUNCTION
+
+' Sorts file-browser scratch items using the current Navigator sort mode.
+SUB SortFileBrowserTempItems(BYVAL winIdx AS INTEGER, BYVAL firstIdx AS INTEGER, BYVAL lastIdx AS INTEGER)
+    DIM gapSize AS INTEGER
+    DIM itemIdx AS INTEGER
+    DIM moveIdx AS INTEGER
+    DIM sortItem AS STRING
+    DIM sortValue AS STRING
+    DIM sortKey AS STRING
+    DIM sortKeys(1 TO 256) AS STRING
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN winIdx = activeLayoutWindow
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN
+        SortTempComboItems firstIdx, lastIdx
+        EXIT SUB
+    END IF
+    IF layoutWindows(winIdx).used = 0 THEN
+        SortTempComboItems firstIdx, lastIdx
+        EXIT SUB
+    END IF
+
+    IF firstIdx < 1 THEN firstIdx = 1
+    IF lastIdx > tempComboItemCount THEN lastIdx = tempComboItemCount
+    IF lastIdx <= firstIdx THEN EXIT SUB
+
+    FOR itemIdx = firstIdx TO lastIdx
+        sortKeys(itemIdx) = FileBrowserSortKey(winIdx, tempComboItems(itemIdx), tempComboValues(itemIdx))
+    NEXT
+
+    gapSize = (lastIdx - firstIdx + 1) \ 2
+    DO WHILE gapSize > 0
+        FOR itemIdx = firstIdx + gapSize TO lastIdx
+            sortItem = tempComboItems(itemIdx)
+            sortValue = tempComboValues(itemIdx)
+            sortKey = sortKeys(itemIdx)
+            moveIdx = itemIdx
+
+            DO WHILE moveIdx - gapSize >= firstIdx
+                IF sortKeys(moveIdx - gapSize) <= sortKey THEN EXIT DO
+
+                tempComboItems(moveIdx) = tempComboItems(moveIdx - gapSize)
+                tempComboValues(moveIdx) = tempComboValues(moveIdx - gapSize)
+                sortKeys(moveIdx) = sortKeys(moveIdx - gapSize)
+                moveIdx = moveIdx - gapSize
+            LOOP
+
+            tempComboItems(moveIdx) = sortItem
+            tempComboValues(moveIdx) = sortValue
+            sortKeys(moveIdx) = sortKey
+        NEXT
+        gapSize = gapSize \ 2
+    LOOP
+END SUB
+
+SUB FileBrowserSetSortMode(BYVAL winIdx AS INTEGER, BYVAL sortText AS STRING, BYVAL statusControlName AS STRING)
+    DIM i AS INTEGER
+    DIM newMode AS STRING
+    DIM statusText AS STRING
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+
+    newMode = FileBrowserNormalizeSortMode(sortText)
+    layoutFileBrowserSortMode(winIdx) = newMode
+
+    SELECT CASE newMode
+    CASE "EXTENSION"
+        statusText = "Sort: Extension"
+    CASE "SIZE"
+        statusText = "Sort: Size"
+    CASE "DATE"
+        statusText = "Sort: Date"
+    CASE ELSE
+        statusText = "Sort: Name"
+    END SELECT
+    IF statusControlName <> "" THEN SetTextboxTextByName statusControlName, statusText
+
+    activeLayoutWindow = winIdx
+    SyncGlobalsFromLayoutWindow winIdx
+    LayoutRefreshPersistentFileBrowserState winIdx
+
+    FOR i = 1 TO uiCount
+        IF uiElems(i).sourceKindId = UI_SOURCE_DIRS OR uiElems(i).sourceKindId = UI_SOURCE_FILES OR uiElems(i).sourceKindId = UI_SOURCE_COMBINED THEN
+            MarkLayoutDirtyElement winIdx, i
+        END IF
+    NEXT
+
+    MarkLayoutWindowVisualDirty winIdx
+    SyncLayoutWindowFromGlobals winIdx
+    LayoutSavePersistentState winIdx
+END SUB
+
+FUNCTION FileBrowserNormalizeMaskText(BYVAL maskText AS STRING) AS STRING
+    DIM workText AS STRING
+    DIM outText AS STRING
+    DIM i AS INTEGER
+    DIM ch AS STRING
+
+    workText = UCASE$(TRIM$(maskText))
+    IF workText = "" OR workText = "*.*" THEN RETURN ""
+
+    outText = ""
+    FOR i = 1 TO LEN(workText)
+        ch = MID$(workText, i, 1)
+        IF ch = "," THEN ch = ";"
+        IF ch <> " " THEN outText = outText + ch
+    NEXT
+
+    IF outText = "*.*" THEN RETURN ""
+    RETURN outText
+END FUNCTION
+
+FUNCTION FileBrowserMaskTextForWindow(BYVAL winIdx AS INTEGER) AS STRING
+    DIM appPath AS STRING
+    DIM maskText AS STRING
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN RETURN ""
+    IF layoutWindows(winIdx).used = 0 THEN RETURN ""
+
+    maskText = FileBrowserNormalizeMaskText(layoutFileBrowserMaskText(winIdx))
+    IF TRIM$(layoutFileBrowserMaskText(winIdx)) <> "" THEN RETURN maskText
+
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    maskText = FileBrowserNormalizeMaskText(AppCfgValue(appPath, "FILE_BROWSER_MASK_DEFAULT", ""))
+    layoutFileBrowserMaskText(winIdx) = maskText
+    RETURN maskText
+END FUNCTION
+
+FUNCTION FileBrowserMaskDisplayText(BYVAL winIdx AS INTEGER) AS STRING
+    DIM maskText AS STRING
+
+    maskText = FileBrowserMaskTextForWindow(winIdx)
+    IF maskText = "" THEN RETURN "*.*"
+    RETURN maskText
+END FUNCTION
+
+FUNCTION FileBrowserFileAllowedByMask(BYVAL winIdx AS INTEGER, BYVAL fileName AS STRING) AS INTEGER
+    DIM maskText AS STRING
+
+    maskText = FileBrowserMaskTextForWindow(winIdx)
+    IF maskText = "" THEN RETURN -1
+    RETURN FileMaskAllowsFile(fileName, maskText)
+END FUNCTION
+
+SUB FileBrowserApplyMask(BYVAL winIdx AS INTEGER, BYVAL maskText AS STRING, BYVAL statusControlName AS STRING)
+    DIM normalizedMask AS STRING
+    DIM statusText AS STRING
+    DIM restoreWin AS INTEGER
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+
+    normalizedMask = FileBrowserNormalizeMaskText(maskText)
+    layoutFileBrowserMaskText(winIdx) = normalizedMask
+
+    IF normalizedMask = "" THEN
+        statusText = "Filter cleared"
+    ELSE
+        statusText = "Filter: " + normalizedMask
+    END IF
+
+    restoreWin = activeLayoutWindow
+    activeLayoutWindow = winIdx
+    SyncGlobalsFromLayoutWindow winIdx
+    LayoutRefreshPersistentFileBrowserState winIdx
+    IF statusControlName <> "" THEN SetTextboxTextByName statusControlName, statusText
+    SyncLayoutWindowFromGlobals winIdx
+    LayoutSavePersistentState winIdx
+
+    IF restoreWin >= LBOUND(layoutWindows) AND restoreWin <= UBOUND(layoutWindows) THEN
+        IF layoutWindows(restoreWin).used <> 0 THEN
+            activeLayoutWindow = restoreWin
+            SyncGlobalsFromLayoutWindow restoreWin
+        END IF
+    END IF
+END SUB
+
+SUB ShowFileBrowserMaskDialog(BYVAL dialogAppPath AS STRING, BYVAL sourceWin AS INTEGER, BYVAL statusControlName AS STRING)
+    DIM maskApp AS STRING
+    DIM maskText AS STRING
+
+    maskApp = NormalizePath(TRIM$(dialogAppPath))
+    IF sourceWin < LBOUND(layoutWindows) OR sourceWin > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(sourceWin).used = 0 THEN EXIT SUB
+    IF maskApp = "" THEN EXIT SUB
+    IF DIR(LayoutFilePath(maskApp)) = "" THEN EXIT SUB
+
+    fileBrowserMaskSourceWin = sourceWin
+    fileBrowserMaskStatusControl = statusControlName
+    maskText = FileBrowserMaskDisplayText(sourceWin)
+
+    OpenDialogLayoutAndApplyProfile maskApp, maskText, "", 0
+    SetTextboxTextByName "MASK_TEXT", maskText
+    SyncLayoutWindowFromGlobals activeLayoutWindow
+END SUB
+
+SUB FileBrowserEnsureActiveListForPage(BYVAL winIdx AS INTEGER)
+    DIM activeName AS STRING
+    DIM activeIdx AS INTEGER
+    DIM i AS INTEGER
+    DIM fallbackName AS STRING
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+
+    activeName = TRIM$(layoutFileBrowserActiveList(winIdx))
+    activeIdx = GetControlIndexByName(activeName)
+    IF FileBrowserListIsBrowserList(activeIdx) <> 0 THEN
+        IF FileBrowserListIsVisibleOnCurrentPage(activeIdx) <> 0 THEN EXIT SUB
+    END IF
+
+    fallbackName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+    IF fallbackName <> "" THEN
+        activeIdx = GetControlIndexByName(fallbackName)
+        IF FileBrowserListIsBrowserList(activeIdx) <> 0 THEN
+            IF FileBrowserListIsVisibleOnCurrentPage(activeIdx) <> 0 THEN
+                FileBrowserSetActiveListByIndex winIdx, activeIdx
+                EXIT SUB
+            END IF
+        END IF
+    END IF
+
+    fallbackName = AppControlNameValue(winIdx, "FILE_BROWSER_DIR_CONTROL", "")
+    IF fallbackName <> "" THEN
+        activeIdx = GetControlIndexByName(fallbackName)
+        IF FileBrowserListIsBrowserList(activeIdx) <> 0 THEN
+            IF FileBrowserListIsVisibleOnCurrentPage(activeIdx) <> 0 THEN
+                FileBrowserSetActiveListByIndex winIdx, activeIdx
+                EXIT SUB
+            END IF
+        END IF
+    END IF
+
+    FOR i = 1 TO uiCount
+        IF FileBrowserListIsBrowserList(i) <> 0 THEN
+            IF FileBrowserListIsVisibleOnCurrentPage(i) <> 0 THEN
+                FileBrowserSetActiveListByIndex winIdx, i
+                EXIT SUB
+            END IF
+        END IF
+    NEXT
+END SUB
+
+FUNCTION FileBrowserOppositeListName(BYVAL winIdx AS INTEGER, BYVAL listControlName AS STRING) AS STRING
+    DIM listName AS STRING
+    DIM oppName AS STRING
+
+    FileBrowserOppositeListName = ""
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT FUNCTION
+    IF layoutWindows(winIdx).used = 0 THEN EXIT FUNCTION
+    listName = UCASE$(TRIM$(listControlName))
+    IF listName = "" THEN EXIT FUNCTION
+
+    oppName = TRIM$(AppControlNameValue(winIdx, "FILE_BROWSER_OPPOSITE_CONTROL_" + listName, ""))
+    IF oppName = "" THEN oppName = TRIM$(AppControlNameValue(winIdx, "FILE_BROWSER_OPPOSITE_" + listName, ""))
+    IF oppName = "" THEN EXIT FUNCTION
+
+    IF FileBrowserListIsBrowserList(GetControlIndexByName(oppName)) <> 0 THEN FileBrowserOppositeListName = oppName
+END FUNCTION
+
+FUNCTION FileBrowserOppositePathControlName(BYVAL winIdx AS INTEGER, BYVAL listControlName AS STRING) AS STRING
+    DIM oppName AS STRING
+    DIM pathName AS STRING
+
+    FileBrowserOppositePathControlName = ""
+    oppName = FileBrowserOppositeListName(winIdx, listControlName)
+    IF oppName = "" THEN EXIT FUNCTION
+
+    pathName = TRIM$(AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL_" + UCASE$(TRIM$(oppName)), ""))
+    IF pathName = "" THEN pathName = TRIM$(AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL", ""))
+    FileBrowserOppositePathControlName = pathName
+END FUNCTION
+
+FUNCTION FileBrowserOppositePathForList(BYVAL winIdx AS INTEGER, BYVAL listControlName AS STRING) AS STRING
+    DIM oppName AS STRING
+    DIM pathName AS STRING
+    DIM oppIdx AS INTEGER
+    DIM dirName AS STRING
+
+    FileBrowserOppositePathForList = ""
+    oppName = FileBrowserOppositeListName(winIdx, listControlName)
+    IF oppName = "" THEN EXIT FUNCTION
+
+    pathName = FileBrowserOppositePathControlName(winIdx, listControlName)
+    IF pathName <> "" THEN dirName = AbsoluteDirPath(TRIM$(GetTextboxTextByName(pathName)))
+
+    IF dirName = "" THEN
+        oppIdx = GetControlIndexByName(oppName)
+        IF oppIdx >= 1 AND oppIdx <= uiCount THEN dirName = AbsoluteDirPath(TRIM$(uiElems(oppIdx).sourceDir))
+    END IF
+
+    FileBrowserOppositePathForList = dirName
+END FUNCTION
+
+
+FUNCTION FileBrowserResolveActionControlName(BYVAL winIdx AS INTEGER, BYVAL controlName AS STRING, BYVAL preferDirs AS INTEGER) AS STRING
+    DIM controlText AS STRING
+    DIM focusIdx AS INTEGER
+    DIM activeName AS STRING
+    DIM activeIdx AS INTEGER
+
+    controlText = TRIM$(controlName)
+    IF UCASE$(controlText) <> "ACTIVE" THEN RETURN controlText
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN RETURN ""
+    IF layoutWindows(winIdx).used = 0 THEN RETURN ""
+
+    focusIdx = uiFocusIndex
+    IF winIdx >= LBOUND(layoutWindows) AND winIdx <= UBOUND(layoutWindows) THEN
+        IF layoutWindows(winIdx).used <> 0 THEN
+            IF activeLayoutWindow <> winIdx THEN focusIdx = layoutWindows(winIdx).focusIndex
+        END IF
+    END IF
+
+    IF focusIdx >= 1 AND focusIdx <= uiCount THEN
+        IF FileBrowserListKindMatches(focusIdx, preferDirs) <> 0 THEN
+            FileBrowserSetActiveListByIndex winIdx, focusIdx
+            RETURN uiElems(focusIdx).name
+        END IF
+    END IF
+
+    activeName = TRIM$(layoutFileBrowserActiveList(winIdx))
+    activeIdx = GetControlIndexByName(activeName)
+    IF FileBrowserListKindMatches(activeIdx, preferDirs) <> 0 THEN RETURN uiElems(activeIdx).name
+
+    RETURN ""
+END FUNCTION
+
+FUNCTION FileBrowserResolvePathControlName(BYVAL winIdx AS INTEGER, BYVAL controlName AS STRING) AS STRING
+    DIM controlText AS STRING
+    DIM focusIdx AS INTEGER
+    DIM listControlName AS STRING
+    DIM pathControlName AS STRING
+    DIM useOpposite AS INTEGER
+    DIM activeIdx AS INTEGER
+
+    controlText = TRIM$(controlName)
+    IF UCASE$(controlText) <> "FILE_BROWSER_ACTIVE_PATH" AND UCASE$(controlText) <> "ACTIVE_PATH" AND _
+       UCASE$(controlText) <> "FILE_BROWSER_OPPOSITE_PATH" AND UCASE$(controlText) <> "OPPOSITE_PATH" THEN RETURN controlText
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN RETURN ""
+    IF layoutWindows(winIdx).used = 0 THEN RETURN ""
+
+    IF UCASE$(controlText) = "FILE_BROWSER_OPPOSITE_PATH" OR UCASE$(controlText) = "OPPOSITE_PATH" THEN useOpposite = -1
+
+    focusIdx = uiFocusIndex
+    IF winIdx >= LBOUND(layoutWindows) AND winIdx <= UBOUND(layoutWindows) THEN
+        IF layoutWindows(winIdx).used <> 0 THEN
+            IF activeLayoutWindow <> winIdx THEN focusIdx = layoutWindows(winIdx).focusIndex
+        END IF
+    END IF
+
+    IF focusIdx >= 1 AND focusIdx <= uiCount THEN
+        IF FileBrowserListIsBrowserList(focusIdx) <> 0 THEN
+            FileBrowserSetActiveListByIndex winIdx, focusIdx
+            listControlName = TRIM$(uiElems(focusIdx).name)
+        END IF
+    END IF
+
+    IF listControlName = "" THEN
+        activeIdx = GetControlIndexByName(TRIM$(layoutFileBrowserActiveList(winIdx)))
+        IF FileBrowserListIsBrowserList(activeIdx) <> 0 THEN listControlName = TRIM$(uiElems(activeIdx).name)
+    END IF
+
+    IF listControlName <> "" THEN
+        IF useOpposite <> 0 THEN
+            pathControlName = FileBrowserOppositePathControlName(winIdx, listControlName)
+        ELSE
+            pathControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL_" + UCASE$(listControlName), "")
+        END IF
+    END IF
+    IF pathControlName = "" THEN pathControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL", "")
+
+    RETURN pathControlName
+END FUNCTION
+
+SUB RefreshFileBrowserAuxListControls(BYVAL expWin AS INTEGER, BYVAL dirName AS STRING, BYVAL primaryDirName AS STRING, BYVAL primaryFileName AS STRING, BYREF statsText AS STRING)
+    DIM i AS INTEGER
+    DIM tabNumber AS INTEGER
+    DIM activePage AS STRING
+    DIM visible AS INTEGER
+
+    GetLayoutActivePage activePage
+
+    FOR i = 1 TO uiCount
+        IF uiElems(i).kindId = UI_KIND_LISTBOX THEN
+            IF uiElems(i).sourceKindId = UI_SOURCE_DIRS OR uiElems(i).sourceKindId = UI_SOURCE_FILES OR uiElems(i).sourceKindId = UI_SOURCE_COMBINED THEN
+                IF UCASE$(TRIM$(uiElems(i).name)) <> UCASE$(TRIM$(primaryDirName)) AND UCASE$(TRIM$(uiElems(i).name)) <> UCASE$(TRIM$(primaryFileName)) THEN
+                    visible = 0
+                    IF uiElems(i).page = "" THEN
+                        visible = -1
+                    ELSEIF uiElems(i).pageKey = activePage THEN
+                        visible = -1
+                    END IF
+
+                    IF visible <> 0 THEN
+                        uiElems(i).sourceDir = dirName
+                        IF TRIM$(uiElems(i).sourceMask) = "" THEN uiElems(i).sourceMask = "*.*"
+                        uiElems(i).sourceItems = ""
+                        uiElems(i).text = ""
+                        comboScrollTop(expWin, i) = 0
+
+                        IF uiElems(i).sourceKindId = UI_SOURCE_FILES THEN
+                            BuildFileBrowserFileItemsFast i, dirName, statsText
+                        ELSE
+                            BuildComboItems i
+                            IF uiElems(i).sourceKindId = UI_SOURCE_COMBINED AND statsText = "" THEN statsText = DirectoryStatsText(dirName)
+                        END IF
+
+                        uiElems(i).sourceItems = BuildSourceItemsFromTemp()
+                        layoutUiElems(expWin, i) = uiElems(i)
+                        MarkLayoutDirtyElement expWin, i
+                    END IF
+                END IF
+            END IF
+        END IF
+    NEXT
+END SUB
+
+
+FUNCTION FileBrowserRootPath(BYVAL dirName AS STRING) AS STRING
+    DIM p AS STRING
+
+    p = AbsoluteDirPath(TRIM$(dirName))
+    IF p = "" THEN p = AbsoluteDirPath(".")
+    IF LEN(p) >= 2 THEN
+        IF MID$(p, 2, 1) = ":" THEN RETURN LEFT$(p, 2) + CHR$(92)
+    END IF
+    RETURN CurrentDrivePrefix() + CHR$(92)
+END FUNCTION
+
+SUB MarkFileBrowserDriveBarsForPath(BYVAL expWin AS INTEGER, BYVAL pathControlName AS STRING)
+    DIM i AS INTEGER
+    DIM pathKey AS STRING
+    DIM sourceKey AS STRING
+
+    IF expWin < LBOUND(layoutWindows) OR expWin > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(expWin).used = 0 THEN EXIT SUB
+
+    pathKey = UCASE$(TRIM$(pathControlName))
+    FOR i = 1 TO uiCount
+        IF uiElems(i).kindId = UI_KIND_LISTBOX THEN
+            IF uiElems(i).sourceKindId = UI_SOURCE_DRIVES THEN
+                sourceKey = UCASE$(TRIM$(uiElems(i).sourceControl))
+                IF sourceKey = "" OR sourceKey = pathKey THEN MarkLayoutDirtyElement expWin, i
+            END IF
+        END IF
+    NEXT
+END SUB
+
+SUB FileBrowserNavigateToPath(BYVAL winIdx AS INTEGER, BYVAL pathControlName AS STRING, BYVAL listControlName AS STRING, BYVAL statusControlName AS STRING, BYVAL dirName AS STRING, BYVAL statusVerb AS STRING)
+    DIM primaryPathControl AS STRING
+    DIM primaryDirControl AS STRING
+    DIM primaryFileControl AS STRING
+    DIM statsControlName AS STRING
+    DIM listIdx AS INTEGER
+    DIM resolvedDir AS STRING
+    DIM listNameUpper AS STRING
+    DIM primaryRoute AS INTEGER
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
+
+    activeLayoutWindow = winIdx
+    SyncGlobalsFromLayoutWindow winIdx
+
+    pathControlName = FileBrowserResolvePathControlName(winIdx, pathControlName)
+    listControlName = FileBrowserResolveActionControlName(winIdx, listControlName, 0)
+
+    IF pathControlName = "" AND listControlName <> "" THEN pathControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL_" + UCASE$(TRIM$(listControlName)), "")
+    IF pathControlName = "" THEN pathControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL", "")
+    IF statusControlName = "" THEN statusControlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+    statsControlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATS_CONTROL", "")
+
+    IF TRIM$(dirName) = "" AND pathControlName <> "" THEN dirName = GetTextboxTextByName(pathControlName)
+    IF TRIM$(dirName) = "" THEN dirName = "."
+    resolvedDir = AbsoluteDirPath(dirName)
+
+    IF resolvedDir = "" OR DirectoryExistsForSize(resolvedDir) = 0 THEN
+        IF statusControlName <> "" THEN SetTextboxTextByName statusControlName, "Directory unavailable: " + TRIM$(dirName)
+        SyncLayoutWindowFromGlobals winIdx
+        EXIT SUB
+    END IF
+
+    primaryPathControl = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL", "")
+    primaryDirControl = AppControlNameValue(winIdx, "FILE_BROWSER_DIR_CONTROL", "")
+    primaryFileControl = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+
+    primaryRoute = 0
+    IF UCASE$(TRIM$(pathControlName)) = UCASE$(TRIM$(primaryPathControl)) THEN
+        listNameUpper = UCASE$(TRIM$(listControlName))
+        IF listNameUpper = "" OR listNameUpper = UCASE$(TRIM$(primaryDirControl)) OR listNameUpper = UCASE$(TRIM$(primaryFileControl)) THEN primaryRoute = -1
+    END IF
+
+    IF primaryRoute <> 0 THEN
+        ConfigureFileBrowserWindow winIdx, resolvedDir
+    ELSE
+        IF listControlName = "" THEN
+            listIdx = GetControlIndexByName(TRIM$(layoutFileBrowserActiveList(winIdx)))
+            IF FileBrowserListIsBrowserList(listIdx) <> 0 THEN listControlName = TRIM$(uiElems(listIdx).name)
+        END IF
+        ConfigureFileBrowserPane winIdx, listControlName, pathControlName, statsControlName, resolvedDir
+    END IF
+
+    IF statusControlName <> "" THEN
+        IF TRIM$(statusVerb) = "" THEN statusVerb = "Opened"
+        SetTextboxTextByName statusControlName, TRIM$(statusVerb) + " " + resolvedDir
+    END IF
+    SyncLayoutWindowFromGlobals winIdx
+END SUB
+
+
+SUB ConfigureFileBrowserPane(BYVAL expWin AS INTEGER, BYVAL listControlName AS STRING, BYVAL pathControlName AS STRING, BYVAL statsControlName AS STRING, BYVAL dirName AS STRING)
+    DIM listIdx AS INTEGER
+    DIM pathIdx AS INTEGER
+    DIM refreshSame AS INTEGER
+    DIM refreshTop AS INTEGER
+    DIM refreshValue AS STRING
+    DIM refreshText AS STRING
+    DIM refreshOldSourceDir AS STRING
+    DIM refreshStatsText AS STRING
+    DIM refreshMatchIdx AS INTEGER
+    DIM refreshItemIdx AS INTEGER
+    DIM refreshOldFocus AS INTEGER
+    DIM refreshRestoreFocus AS INTEGER
+
+    IF expWin < LBOUND(layoutWindows) OR expWin > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(expWin).used = 0 THEN EXIT SUB
+
+    SyncGlobalsFromLayoutWindow expWin
+    refreshOldFocus = uiFocusIndex
+    refreshRestoreFocus = 0
+
+    listControlName = FileBrowserResolveActionControlName(expWin, listControlName, 0)
+    IF listControlName = "" THEN listControlName = FileBrowserResolveActionControlName(expWin, "ACTIVE", -1)
+    pathControlName = FileBrowserResolvePathControlName(expWin, pathControlName)
+
+    IF listControlName <> "" AND pathControlName = "" THEN pathControlName = AppControlNameValue(expWin, "FILE_BROWSER_PATH_CONTROL_" + UCASE$(TRIM$(listControlName)), "")
+    IF pathControlName = "" THEN pathControlName = AppControlNameValue(expWin, "FILE_BROWSER_PATH_CONTROL", "")
+    IF statsControlName = "" THEN statsControlName = AppControlNameValue(expWin, "FILE_BROWSER_STATS_CONTROL", "")
+
+    IF TRIM$(dirName) = "" AND pathControlName <> "" THEN dirName = GetTextboxTextByName(pathControlName)
+    IF TRIM$(dirName) = "" THEN dirName = "."
+    dirName = AbsoluteDirPath(dirName)
+    IF dirName = "" THEN dirName = AbsoluteDirPath(".")
+
+    listIdx = GetControlIndexByName(listControlName)
+    IF listIdx >= 1 AND listIdx <= uiCount THEN
+        IF uiElems(listIdx).kindId = UI_KIND_LISTBOX THEN
+            refreshSame = 0
+            refreshOldSourceDir = AbsoluteDirPath(uiElems(listIdx).sourceDir)
+            IF refreshOldSourceDir <> "" THEN
+                IF UCASE$(refreshOldSourceDir) = UCASE$(dirName) THEN refreshSame = -1
+            END IF
+            IF refreshSame <> 0 THEN
+                refreshTop = comboScrollTop(expWin, listIdx)
+                refreshValue = ControlValueFromListControl(listIdx)
+                refreshText = RTRIM$(uiElems(listIdx).text)
+            END IF
+
+            uiElems(listIdx).sourceDir = dirName
+            IF TRIM$(uiElems(listIdx).sourceMask) = "" THEN uiElems(listIdx).sourceMask = "*.*"
+            uiElems(listIdx).sourceItems = ""
+            uiElems(listIdx).text = ""
+            comboScrollTop(expWin, listIdx) = 0
+
+            IF uiElems(listIdx).sourceKindId = UI_SOURCE_FILES THEN
+                BuildFileBrowserFileItemsFast listIdx, dirName, refreshStatsText
+            ELSE
+                BuildComboItems listIdx
+                IF uiElems(listIdx).sourceKindId = UI_SOURCE_COMBINED THEN refreshStatsText = DirectoryStatsText(dirName)
+            END IF
+            uiElems(listIdx).sourceItems = BuildSourceItemsFromTemp()
+
+            IF refreshSame <> 0 THEN
+                comboScrollTop(expWin, listIdx) = refreshTop
+                refreshMatchIdx = 0
+                FOR refreshItemIdx = 1 TO tempComboItemCount
+                    IF refreshValue <> "" THEN
+                        IF UCASE$(RTRIM$(tempComboValues(refreshItemIdx))) = UCASE$(refreshValue) THEN
+                            refreshMatchIdx = refreshItemIdx
+                            EXIT FOR
+                        END IF
+                    END IF
+                    IF refreshMatchIdx = 0 AND refreshText <> "" THEN
+                        IF UCASE$(RTRIM$(tempComboItems(refreshItemIdx))) = UCASE$(refreshText) THEN
+                            refreshMatchIdx = refreshItemIdx
+                            EXIT FOR
+                        END IF
+                    END IF
+                NEXT
+                IF refreshMatchIdx > 0 THEN
+                    uiElems(listIdx).text = RTRIM$(tempComboItems(refreshMatchIdx))
+                    layoutListAnchorIdx(expWin, listIdx) = refreshMatchIdx
+                    IF refreshOldFocus = listIdx THEN refreshRestoreFocus = listIdx
+                END IF
+            END IF
+
+            layoutUiElems(expWin, listIdx) = uiElems(listIdx)
+            MarkLayoutDirtyElement expWin, listIdx
+        END IF
+    END IF
+
+    IF pathControlName <> "" THEN
+        pathIdx = GetControlIndexByName(pathControlName)
+        IF pathIdx >= 1 AND pathIdx <= uiCount THEN
+            IF uiElems(pathIdx).kindId = UI_KIND_TEXTBOX THEN
+                SetTextboxTextByName pathControlName, dirName
+                layoutUiElems(expWin, pathIdx) = uiElems(pathIdx)
+                layoutUiEdit(expWin, pathIdx) = uiEdit(pathIdx)
+                MarkLayoutDirtyElement expWin, pathIdx
+            END IF
+        END IF
+    END IF
+
+    MarkFileBrowserDriveBarsForPath expWin, pathControlName
+    UpdateDirectoryStatsControl expWin, dirName, statsControlName
+    IF listControlName <> "" THEN FileBrowserSetActiveListByName expWin, listControlName
+    FileBrowserEnsureActiveListForPage expWin
+    comboOpenIndex(expWin) = 0
+    uiFocusIndex = refreshRestoreFocus
+    uiPressedIndex = 0
+    layoutWindows(expWin).focusIndex = refreshRestoreFocus
+    layoutWindows(expWin).pressedIndex = 0
+    MarkLayoutWindowVisualDirty expWin
+    SyncLayoutWindowFromGlobals expWin
+END SUB
+
+SUB FileBrowserRefreshVisibleListsInPlace(BYVAL expWin AS INTEGER)
+    DIM i AS INTEGER
+    DIM visible AS INTEGER
+    DIM activePage AS STRING
+    DIM listControlName AS STRING
+    DIM pathControlName AS STRING
+    DIM statsControlName AS STRING
+    DIM dirName AS STRING
+    DIM restoreWin AS INTEGER
+    DIM restoreFocus AS INTEGER
+    DIM restorePressed AS INTEGER
+    DIM restoreActiveList AS STRING
+
+    IF expWin < LBOUND(layoutWindows) OR expWin > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(expWin).used = 0 THEN EXIT SUB
+
+    restoreWin = activeLayoutWindow
+    activeLayoutWindow = expWin
+    SyncGlobalsFromLayoutWindow expWin
+
+    restoreFocus = uiFocusIndex
+    restorePressed = uiPressedIndex
+    restoreActiveList = TRIM$(layoutFileBrowserActiveList(expWin))
+    statsControlName = AppControlNameValue(expWin, "FILE_BROWSER_STATS_CONTROL", "")
+    GetLayoutActivePage activePage
+
+    FOR i = 1 TO uiCount
+        IF uiElems(i).kindId = UI_KIND_LISTBOX THEN
+            IF uiElems(i).sourceKindId = UI_SOURCE_DIRS OR uiElems(i).sourceKindId = UI_SOURCE_FILES OR uiElems(i).sourceKindId = UI_SOURCE_COMBINED THEN
+                visible = 0
+                IF uiElems(i).page = "" THEN
+                    visible = -1
+                ELSEIF uiElems(i).pageKey = activePage THEN
+                    visible = -1
+                END IF
+
+                IF visible <> 0 THEN
+                    listControlName = TRIM$(uiElems(i).name)
+                    pathControlName = AppControlNameValue(expWin, "FILE_BROWSER_PATH_CONTROL_" + UCASE$(listControlName), "")
+                    IF pathControlName = "" THEN pathControlName = AppControlNameValue(expWin, "FILE_BROWSER_PATH_CONTROL", "")
+
+                    dirName = ""
+                    IF pathControlName <> "" THEN dirName = GetTextboxTextByName(pathControlName)
+                    IF TRIM$(dirName) = "" THEN dirName = RTRIM$(uiElems(i).sourceDir)
+
+                    IF TRIM$(dirName) <> "" THEN
+                        ConfigureFileBrowserPane expWin, listControlName, pathControlName, statsControlName, dirName
+                        activeLayoutWindow = expWin
+                        SyncGlobalsFromLayoutWindow expWin
+                    END IF
+                END IF
+            END IF
+        END IF
+    NEXT
+
+    IF restoreActiveList <> "" THEN FileBrowserSetActiveListByName expWin, restoreActiveList
+    FileBrowserEnsureActiveListForPage expWin
+    uiFocusIndex = restoreFocus
+    uiPressedIndex = restorePressed
+    layoutWindows(expWin).focusIndex = restoreFocus
+    layoutWindows(expWin).pressedIndex = restorePressed
+    MarkLayoutWindowVisualDirty expWin
+    SyncLayoutWindowFromGlobals expWin
+
+    activeLayoutWindow = restoreWin
+    IF activeLayoutWindow >= LBOUND(layoutWindows) AND activeLayoutWindow <= UBOUND(layoutWindows) THEN
+        IF layoutWindows(activeLayoutWindow).used <> 0 THEN SyncGlobalsFromLayoutWindow activeLayoutWindow
+    END IF
+END SUB
+
+
+
 SUB ConfigureFileBrowserWindow(BYVAL expWin AS INTEGER, BYVAL dirName AS STRING)
     DIM dirIdx AS INTEGER
     DIM fileIdx AS INTEGER
@@ -21283,9 +23289,15 @@ SUB ConfigureFileBrowserWindow(BYVAL expWin AS INTEGER, BYVAL dirName AS STRING)
                 uiElems(fileIdx).sourceItems = ""
                 uiElems(fileIdx).text = ""
                 comboScrollTop(expWin, fileIdx) = 0
-                ' Reuse the Navigator file scan for the visible list and status line.
-                ' The stats cache lets UpdateDirectoryStatsControl avoid a second scan.
-                BuildFileBrowserFileItemsFast fileIdx, dirName, refreshStatsText
+                IF uiElems(fileIdx).sourceKindId = UI_SOURCE_COMBINED THEN
+                    ' Combined panes use the generic source builder so folders and files share one list.
+                    BuildComboItems fileIdx
+                    refreshStatsText = DirectoryStatsText(dirName)
+                ELSE
+                    ' Reuse the Navigator file scan for the visible list and status line.
+                    ' The stats cache lets UpdateDirectoryStatsControl avoid a second scan.
+                    BuildFileBrowserFileItemsFast fileIdx, dirName, refreshStatsText
+                END IF
                 uiElems(fileIdx).sourceItems = BuildSourceItemsFromTemp()
 
                 IF refreshFileSame <> 0 THEN
@@ -21318,6 +23330,8 @@ SUB ConfigureFileBrowserWindow(BYVAL expWin AS INTEGER, BYVAL dirName AS STRING)
         END IF
     END IF
 
+    RefreshFileBrowserAuxListControls expWin, dirName, dirControlName, fileControlName, refreshStatsText
+
     IF pathControlName <> "" THEN
         pathIdx = GetControlIndexByName(pathControlName)
         IF pathIdx >= 1 AND pathIdx <= uiCount THEN
@@ -21330,7 +23344,9 @@ SUB ConfigureFileBrowserWindow(BYVAL expWin AS INTEGER, BYVAL dirName AS STRING)
         END IF
     END IF
 
+    MarkFileBrowserDriveBarsForPath expWin, pathControlName
     UpdateDirectoryStatsControl expWin, dirName, statsControlName
+    FileBrowserEnsureActiveListForPage expWin
 
     comboOpenIndex(expWin) = 0
     uiFocusIndex = refreshRestoreFocus
@@ -21882,6 +23898,13 @@ SUB ShowDirectoryCopy(BYVAL dirName AS STRING, BYVAL dialogAppPath AS STRING, BY
 
     ' The FILE_BROWSER copy-directory action stores the source window state before calling here.
     OpenDialogLayoutAndApplyProfile copyApp, dirName, "", -1
+
+    IF fileBrowserDialogDefaultDestDir <> "" AND fileBrowserDialogDefaultDestControl <> "" THEN
+        SetTextboxTextByName fileBrowserDialogDefaultDestControl, fileBrowserDialogDefaultDestDir
+        SyncLayoutWindowFromGlobals activeLayoutWindow
+    END IF
+    fileBrowserDialogDefaultDestDir = ""
+    fileBrowserDialogDefaultDestControl = ""
 END SUB
 
 SUB ShowFileDragDrop(BYVAL sourceList AS STRING, BYVAL destDir AS STRING, BYVAL dialogAppPath AS STRING, BYVAL sourceWin AS INTEGER, BYVAL statusControlName AS STRING)
@@ -21966,6 +23989,7 @@ FUNCTION DirectoryCopyHasItems(BYVAL srcDir AS STRING, BYVAL copyFiles AS INTEGE
     entries = DirectoryEntryList(srcDir)
     scanPos = 1
     DO WHILE scanPos <= LEN(entries)
+        IF fileOpCancel <> 0 THEN EXIT DO
         lineEnd = INSTR(scanPos, entries, CHR$(10))
         IF lineEnd = 0 THEN lineEnd = LEN(entries) + 1
         entryLine = MID$(entries, scanPos, lineEnd - scanPos)
@@ -22016,13 +24040,16 @@ SUB CopyDirectoryTree(BYVAL srcDir AS STRING, BYVAL dstDir AS STRING, BYVAL copy
     DIM dstName AS STRING
     DIM attrBits AS INTEGER
     DIM existedBefore AS INTEGER
+    DIM copyResult AS INTEGER
 
     srcDir = AbsoluteDirPath(TRIM$(srcDir))
     dstDir = NormalizePath(TRIM$(dstDir))
     IF srcDir = "" OR dstDir = "" THEN
         failCount = failCount + 1
+        FileOpProgressUpdate srcDir, dstDir, fileCount, dirCount, failCount, fileOpProgressSkipped, 0
         EXIT SUB
     END IF
+    IF fileOpCancel <> 0 THEN EXIT SUB
 
     existedBefore = PathExistsAny(dstDir)
     IF existedBefore <> 0 THEN
@@ -22034,9 +24061,11 @@ SUB CopyDirectoryTree(BYVAL srcDir AS STRING, BYVAL dstDir AS STRING, BYVAL copy
         MKDIR dstDir
         IF PathExistsAny(dstDir) = 0 THEN
             failCount = failCount + 1
+            FileOpProgressUpdate srcDir, dstDir, fileCount, dirCount, failCount, fileOpProgressSkipped, 0
             EXIT SUB
         END IF
         dirCount = dirCount + 1
+        FileOpProgressUpdate srcDir, dstDir, fileCount, dirCount, failCount, fileOpProgressSkipped, 0
         ClearDirectorySizeCache
     END IF
 
@@ -22060,11 +24089,15 @@ SUB CopyDirectoryTree(BYVAL srcDir AS STRING, BYVAL dstDir AS STRING, BYVAL copy
                         END IF
                     END IF
                 ELSEIF copyFiles <> 0 THEN
-                    IF CopyFileSafeOverwrite(fullName, dstName, overwriteExisting) <> 0 THEN
+                    copyResult = FileOpCopyFileWithConflict(fullName, dstName, overwriteExisting)
+                    IF copyResult > 0 THEN
                         fileCount = fileCount + 1
+                    ELSEIF copyResult < 0 THEN
+                        fileOpProgressSkipped = fileOpProgressSkipped + 1
                     ELSE
                         failCount = failCount + 1
                     END IF
+                    FileOpProgressUpdate fullName, dstName, fileCount, dirCount, failCount, fileOpProgressSkipped, 0
                 END IF
             END IF
         END IF
@@ -22365,6 +24398,7 @@ FUNCTION DeleteDirectoryTree(BYVAL dirPath AS STRING, BYREF fileCount AS INTEGER
                     ELSE
                         failCount = failCount + 1
                     END IF
+                    FileOpProgressUpdate fullName, "", fileCount, dirCount, failCount, fileOpProgressSkipped, 0
                 END IF
             END IF
         END IF
@@ -22374,6 +24408,7 @@ FUNCTION DeleteDirectoryTree(BYVAL dirPath AS STRING, BYREF fileCount AS INTEGER
     RMDIR dirPath
     IF PathExistsAny(dirPath) = 0 THEN
         dirCount = dirCount + 1
+        FileOpProgressUpdate dirPath, "", fileCount, dirCount, failCount, fileOpProgressSkipped, 0
         ClearDirectorySizeCache
         RETURN -1
     END IF
@@ -24665,7 +26700,7 @@ END SUB
 
 FUNCTION LayoutParserSectionIsElement(BYREF sectionName AS STRING) AS INTEGER
     SELECT CASE sectionName
-    CASE "TAB", "LABEL", "PREVIEW", "APPVIEW", "CANVAS", "OVERLAY", "RADIO", "CHECKBOX", "BUTTON", "COMBO", "LISTBOX", "TEXTBOX", "SPLITTER"
+    CASE "TAB", "LABEL", "PREVIEW", "APPVIEW", "CANVAS", "OVERLAY", "RADIO", "CHECKBOX", "BUTTON", "COMBO", "LISTBOX", "TEXTBOX", "SPLITTER", "MENUBAR"
         RETURN -1
     END SELECT
 
@@ -25132,6 +27167,7 @@ SUB OpenLayoutAppWindowCore(BYVAL appPath AS STRING, BYVAL activeStateAlreadySav
     IF bdbgEnabled <> 0 THEN BDbgWindowEvent "OPEN_BEFORE_RUNTIME_INIT path=" + appPath, activeLayoutWindow
     AppRuntime_InitLoadedEvents activeLayoutWindow, LayoutFilePath(appPath)
     IF bdbgEnabled <> 0 THEN BDbgWindowEvent "OPEN_AFTER_RUNTIME_INIT path=" + appPath, activeLayoutWindow
+    LayoutApplyPersistentState activeLayoutWindow
     IF busyStarted <> 0 THEN SetCursorBusy 0
     IF bdbgEnabled <> 0 THEN BDbgWindowEvent "OPEN_DONE path=" + appPath, activeLayoutWindow
 END SUB
@@ -27665,6 +29701,251 @@ FUNCTION FileBrowserConfirmOverwrite(BYVAL targetPath AS STRING, BYVAL targetIsD
     RETURN 0
 END FUNCTION
 
+FUNCTION FileOpAppText(BYVAL sourceWin AS INTEGER, BYVAL keyName AS STRING, BYVAL defaultText AS STRING) AS STRING
+    DIM v AS STRING
+
+    IF sourceWin >= LBOUND(layoutWindows) AND sourceWin <= UBOUND(layoutWindows) THEN
+        IF layoutWindows(sourceWin).used <> 0 THEN
+            v = AppCfgValue(layoutWindows(sourceWin).appPath, keyName, "")
+            IF TRIM$(v) <> "" THEN RETURN v
+        END IF
+    END IF
+    RETURN defaultText
+END FUNCTION
+
+SUB DrawFileOpProgressBox(BYVAL titleText AS STRING, BYVAL actionText AS STRING, BYVAL srcText AS STRING, BYVAL dstText AS STRING, BYVAL filesDone AS INTEGER, BYVAL dirsDone AS INTEGER, BYVAL failsDone AS INTEGER, BYVAL skipsDone AS INTEGER)
+    DIM x1 AS INTEGER, y1 AS INTEGER, x2 AS INTEGER, y2 AS INTEGER
+    DIM countText AS STRING, sourceLabel AS STRING, destLabel AS STRING
+
+    x1 = (SCR_W - 520) \ 2
+    y1 = WORK_Y + ((WORK_H - 170) \ 2)
+    x2 = x1 + 520
+    y2 = y1 + 170
+    sourceLabel = FileOpAppText(fileOpProgressSourceWin, "FILE_BROWSER_PROGRESS_SOURCE_LABEL", "Source")
+    destLabel = FileOpAppText(fileOpProgressSourceWin, "FILE_BROWSER_PROGRESS_DEST_LABEL", "Destination")
+
+    DrawBevelBox x1, y1, x2, y2, 0
+    LINE (x1 + 2, y1 + 20)-(x2 - 2, y2 - 2), COL_CONTROL_BG, BF
+    DrawThemedTitleBar x1 + 1, y1 + 1, x2 - 1, y1 + 18, -1
+    DRAW STRING (x1 + 8, y1 + 6), LEFT$(titleText, 58), COL_TEXT_INV
+    DRAW STRING (x1 + 18, y1 + 36), LEFT$(actionText, 58), COL_TEXT
+    DRAW STRING (x1 + 18, y1 + 62), sourceLabel + ":", COL_TEXT
+    DRAW STRING (x1 + 110, y1 + 62), LEFT$(srcText, 48), COL_TEXT
+    DRAW STRING (x1 + 18, y1 + 88), destLabel + ":", COL_TEXT
+    DRAW STRING (x1 + 110, y1 + 88), LEFT$(dstText, 48), COL_TEXT
+    countText = "Files " + LTRIM$(STR$(filesDone)) + "   Dirs " + LTRIM$(STR$(dirsDone)) + "   Skipped " + LTRIM$(STR$(skipsDone)) + "   Errors " + LTRIM$(STR$(failsDone))
+    DRAW STRING (x1 + 18, y1 + 126), LEFT$(countText, 60), COL_TEXT
+END SUB
+
+SUB FileOpProgressBegin(BYVAL sourceWin AS INTEGER, BYVAL actionName AS STRING)
+    DIM enabledText AS STRING
+
+    fileOpProgressSourceWin = sourceWin
+    enabledText = UCASE$(TRIM$(FileOpAppText(sourceWin, "FILE_BROWSER_PROGRESS_ENABLED", "YES")))
+    fileOpProgressActive = 0
+    fileOpCancel = 0
+    fileOpConflictMode = 0
+    fileOpProgressFiles = 0
+    fileOpProgressDirs = 0
+    fileOpProgressFails = 0
+    fileOpProgressSkipped = 0
+    IF enabledText = "NO" OR enabledText = "0" OR enabledText = "FALSE" THEN EXIT SUB
+    actionName = UCASE$(TRIM$(actionName))
+    SELECT CASE actionName
+    CASE "MOVE"
+        fileOpProgressTitle = FileOpAppText(sourceWin, "FILE_BROWSER_PROGRESS_TITLE_MOVE", "Move Progress")
+        fileOpProgressAction = FileOpAppText(sourceWin, "FILE_BROWSER_PROGRESS_ACTION_MOVE", "Moving items")
+    CASE "DELETE"
+        fileOpProgressTitle = FileOpAppText(sourceWin, "FILE_BROWSER_PROGRESS_TITLE_DELETE", "Delete Progress")
+        fileOpProgressAction = FileOpAppText(sourceWin, "FILE_BROWSER_PROGRESS_ACTION_DELETE", "Deleting items")
+    CASE ELSE
+        fileOpProgressTitle = FileOpAppText(sourceWin, "FILE_BROWSER_PROGRESS_TITLE_COPY", "Copy Progress")
+        fileOpProgressAction = FileOpAppText(sourceWin, "FILE_BROWSER_PROGRESS_ACTION_COPY", "Copying items")
+    END SELECT
+    fileOpProgressActive = -1
+    fileOpProgressNextDraw = 0
+    FileOpProgressUpdate "", "", 0, 0, 0, 0, -1
+END SUB
+
+SUB FileOpProgressUpdate(BYVAL sourcePath AS STRING, BYVAL destPath AS STRING, BYVAL filesDone AS INTEGER, BYVAL dirsDone AS INTEGER, BYVAL failsDone AS INTEGER, BYVAL skipsDone AS INTEGER, BYVAL forceDraw AS INTEGER)
+    IF fileOpProgressActive = 0 THEN EXIT SUB
+    fileOpProgressSrc = sourcePath
+    fileOpProgressDst = destPath
+    fileOpProgressFiles = filesDone
+    fileOpProgressDirs = dirsDone
+    fileOpProgressFails = failsDone
+    fileOpProgressSkipped = skipsDone
+    IF forceDraw = 0 THEN
+        IF TIMER < fileOpProgressNextDraw THEN EXIT SUB
+    END IF
+    fileOpProgressNextDraw = TIMER + 0.12
+    SCREENLOCK
+    cursorBackValid = 0
+    DrawDesktop
+    IF layoutWindowCount > 0 THEN
+        DrawAllLayoutWindows
+    ELSE
+        DrawWindows
+    END IF
+    DrawTaskbar 0
+    DrawFileOpProgressBox fileOpProgressTitle, fileOpProgressAction, sourcePath, destPath, filesDone, dirsDone, failsDone, skipsDone
+    SCREENUNLOCK
+END SUB
+
+SUB FileOpProgressEnd()
+    IF fileOpProgressActive = 0 THEN EXIT SUB
+    FileOpProgressUpdate fileOpProgressSrc, fileOpProgressDst, fileOpProgressFiles, fileOpProgressDirs, fileOpProgressFails, fileOpProgressSkipped, -1
+    fileOpProgressActive = 0
+    SCREENLOCK
+    cursorBackValid = 0
+    DrawDesktop
+    IF layoutWindowCount > 0 THEN
+        DrawAllLayoutWindows
+    ELSE
+        DrawWindows
+    END IF
+    DrawTaskbar 0
+    SCREENUNLOCK
+END SUB
+
+FUNCTION ShowFileOpConflictBox(BYVAL targetPath AS STRING, BYVAL targetIsDir AS INTEGER, BYVAL moveMode AS INTEGER) AS INTEGER
+    DIM msgText AS STRING
+    DIM titleText AS STRING
+    DIM overwriteText AS STRING
+    DIM skipText AS STRING
+    DIM overwriteAllText AS STRING
+    DIM skipAllText AS STRING
+    DIM cancelText AS STRING
+    DIM option1 AS STRING
+    DIM option2 AS STRING
+    DIM option3 AS STRING
+    DIM k AS STRING
+    DIM x1 AS INTEGER, y1 AS INTEGER, x2 AS INTEGER, y2 AS INTEGER
+    DIM boxW AS INTEGER, boxH AS INTEGER
+    DIM textChars AS INTEGER
+    DIM maxChars AS INTEGER
+
+    titleText = FileOpAppText(fileOpProgressSourceWin, "FILE_BROWSER_CONFLICT_TITLE", "File Conflict")
+    IF targetIsDir <> 0 THEN
+        msgText = FileOpAppText(fileOpProgressSourceWin, "FILE_BROWSER_CONFLICT_DIR_TEXT", "Target directory exists:") + " " + FileNameOnly(targetPath)
+    ELSE
+        msgText = FileOpAppText(fileOpProgressSourceWin, "FILE_BROWSER_CONFLICT_FILE_TEXT", "Target file exists:") + " " + FileNameOnly(targetPath)
+    END IF
+    overwriteText = FileOpAppText(fileOpProgressSourceWin, "FILE_BROWSER_CONFLICT_OVERWRITE", "Overwrite")
+    skipText = FileOpAppText(fileOpProgressSourceWin, "FILE_BROWSER_CONFLICT_SKIP", "Skip")
+    overwriteAllText = FileOpAppText(fileOpProgressSourceWin, "FILE_BROWSER_CONFLICT_OVERWRITE_ALL", "Overwrite All")
+    skipAllText = FileOpAppText(fileOpProgressSourceWin, "FILE_BROWSER_CONFLICT_SKIP_ALL", "Skip All")
+    cancelText = FileOpAppText(fileOpProgressSourceWin, "FILE_BROWSER_CONFLICT_CANCEL", "Cancel")
+
+    option1 = "O " + overwriteText + "     S " + skipText
+    option2 = "A " + overwriteAllText + "     K " + skipAllText
+    option3 = "Esc/C " + cancelText
+
+    maxChars = LEN(titleText)
+    IF LEN(msgText) > maxChars THEN maxChars = LEN(msgText)
+    IF LEN(option1) > maxChars THEN maxChars = LEN(option1)
+    IF LEN(option2) > maxChars THEN maxChars = LEN(option2)
+    IF LEN(option3) > maxChars THEN maxChars = LEN(option3)
+    IF maxChars < 34 THEN maxChars = 34
+    IF maxChars > 58 THEN maxChars = 58
+
+    boxW = (maxChars * 8) + 44
+    IF boxW < 330 THEN boxW = 330
+    IF boxW > 500 THEN boxW = 500
+    boxH = 128
+
+    x1 = (SCR_W - boxW) \ 2
+    y1 = WORK_Y + ((WORK_H - boxH) \ 2)
+    x2 = x1 + boxW
+    y2 = y1 + boxH
+    textChars = (boxW - 44) \ 8
+
+    SCREENLOCK
+    cursorBackValid = 0
+    DrawDesktop
+    IF layoutWindowCount > 0 THEN
+        DrawAllLayoutWindows
+    ELSE
+        DrawWindows
+    END IF
+    DrawTaskbar 0
+    DrawBevelBox x1, y1, x2, y2, 0
+    LINE (x1 + 2, y1 + 20)-(x2 - 2, y2 - 2), COL_CONTROL_BG, BF
+    DrawThemedTitleBar x1 + 1, y1 + 1, x2 - 1, y1 + 18, -1
+    DRAW STRING (x1 + 8, y1 + 6), LEFT$(titleText, textChars), COL_TEXT_INV
+    DRAW STRING (x1 + 18, y1 + 36), LEFT$(msgText, textChars), COL_TEXT
+    DRAW STRING (x1 + 18, y1 + 62), LEFT$(option1, textChars), COL_TEXT
+    DRAW STRING (x1 + 18, y1 + 80), LEFT$(option2, textChars), COL_TEXT
+    DRAW STRING (x1 + 18, y1 + 100), LEFT$(option3, textChars), COL_TEXT
+    SCREENUNLOCK
+
+    DO
+        k = UCASE$(INKEY$)
+        IF k <> "" THEN
+            SELECT CASE k
+            CASE "O", CHR$(13): ShowFileOpConflictBox = 1: EXIT DO
+            CASE "S": ShowFileOpConflictBox = 2: EXIT DO
+            CASE "A": ShowFileOpConflictBox = 3: EXIT DO
+            CASE "K": ShowFileOpConflictBox = 4: EXIT DO
+            CASE "C", CHR$(27): ShowFileOpConflictBox = 5: EXIT DO
+            END SELECT
+        END IF
+        SoundServiceAt TIMER
+        SLEEP 10
+    LOOP
+END FUNCTION
+
+FUNCTION FileOpConflictChoice(BYVAL targetPath AS STRING, BYVAL targetIsDir AS INTEGER, BYVAL moveMode AS INTEGER, BYVAL sourceWin AS INTEGER) AS INTEGER
+    DIM choice AS INTEGER
+    targetPath = NormalizePath(TRIM$(targetPath))
+    IF targetPath = "" THEN RETURN 2
+    IF fileOpConflictMode = 1 THEN RETURN 1
+    IF fileOpConflictMode = 2 THEN RETURN 2
+    IF fileOpConflictMode = 3 THEN RETURN 5
+    IF sourceWin <> 0 THEN fileOpProgressSourceWin = sourceWin
+    choice = ShowFileOpConflictBox(targetPath, targetIsDir, moveMode)
+    IF choice = 3 THEN
+        fileOpConflictMode = 1
+        RETURN 1
+    ELSEIF choice = 4 THEN
+        fileOpConflictMode = 2
+        RETURN 2
+    ELSEIF choice = 5 THEN
+        fileOpConflictMode = 3
+        fileOpCancel = -1
+        RETURN 5
+    END IF
+    RETURN choice
+END FUNCTION
+
+FUNCTION FileOpCopyFileWithConflict(BYVAL srcPath AS STRING, BYVAL dstPath AS STRING, BYVAL overwriteMode AS INTEGER) AS INTEGER
+    DIM choice AS INTEGER
+    srcPath = NormalizePath(TRIM$(srcPath))
+    dstPath = NormalizePath(TRIM$(dstPath))
+    IF srcPath = "" OR dstPath = "" THEN RETURN 0
+    IF fileOpCancel <> 0 THEN RETURN 0
+    IF DIR(dstPath) <> "" THEN
+        IF overwriteMode < 0 THEN
+            choice = 1
+        ELSEIF overwriteMode = 0 THEN
+            choice = 2
+        ELSE
+            choice = FileOpConflictChoice(dstPath, 0, 0, fileOpProgressSourceWin)
+        END IF
+        IF choice = 5 THEN
+            fileOpCancel = -1
+            RETURN 0
+        ELSEIF choice = 2 THEN
+            RETURN -1
+        ELSEIF choice = 1 THEN
+            KILL dstPath
+            ClearDirectorySizeCache
+        END IF
+    END IF
+    IF CopyFileSafe(srcPath, dstPath) <> 0 THEN RETURN 1
+    RETURN 0
+END FUNCTION
+
 SUB FileBrowserCopyMoveListToDir(BYVAL sourceList AS STRING, BYVAL targetDir AS STRING, BYVAL moveMode AS INTEGER, BYVAL sourceWin AS INTEGER, BYVAL statusControlName AS STRING)
     DIM itemList AS STRING
     DIM itemPath AS STRING
@@ -27696,6 +29977,11 @@ SUB FileBrowserCopyMoveListToDir(BYVAL sourceList AS STRING, BYVAL targetDir AS 
     ELSEIF targetDir = "" THEN
         statusText = "Drop directory unavailable"
     ELSE
+        IF moveMode <> 0 THEN
+            FileOpProgressBegin sourceWin, "MOVE"
+        ELSE
+            FileOpProgressBegin sourceWin, "COPY"
+        END IF
         itemList = sourceList
         DO WHILE itemList <> ""
             sepPos = INSTR(itemList, CHR$(1))
@@ -27724,10 +30010,10 @@ SUB FileBrowserCopyMoveListToDir(BYVAL sourceList AS STRING, BYVAL targetDir AS 
                     failCount = failCount + 1
                 ELSE
                     destExists = PathExistsAny(newPath)
-                    IF destExists <> 0 THEN overwriteOk = FileBrowserConfirmOverwrite(newPath, isDir, moveMode)
+                    IF destExists <> 0 THEN overwriteOk = FileOpConflictChoice(newPath, isDir, moveMode, sourceWin)
 
-                    IF destExists <> 0 AND overwriteOk = 0 THEN
-                        failCount = failCount + 1
+                    IF destExists <> 0 AND (overwriteOk = 2 OR overwriteOk = 5) THEN
+                        IF overwriteOk = 2 THEN fileOpProgressSkipped = fileOpProgressSkipped + 1 ELSE failCount = failCount + 1
                     ELSEIF isDir <> 0 THEN
                         beforeFails = failCount
                         opFiles = 0
@@ -27741,7 +30027,7 @@ SUB FileBrowserCopyMoveListToDir(BYVAL sourceList AS STRING, BYVAL targetDir AS 
                                 failCount = failCount + 1
                             END IF
                         ELSE
-                            CopyDirectoryTree selectedPath, newPath, -1, -1, -1, -1, -1, opFiles, opDirs, opFails
+                            CopyDirectoryTree selectedPath, newPath, -1, -1, -1, -1, 2, opFiles, opDirs, opFails
                             failCount = failCount + opFails
                             IF opFails = 0 AND PathExistsAny(newPath) <> 0 THEN
                                 IF moveMode <> 0 THEN
@@ -27776,33 +30062,41 @@ SUB FileBrowserCopyMoveListToDir(BYVAL sourceList AS STRING, BYVAL targetDir AS 
                         ELSE
                             failCount = failCount + 1
                         END IF
-                    ELSEIF CopyFileSafeOverwrite(selectedPath, newPath, destExists) <> 0 THEN
-                        successCount = successCount + 1
                     ELSE
-                        failCount = failCount + 1
+                        IF destExists <> 0 AND overwriteOk = 1 THEN
+                            opFiles = FileOpCopyFileWithConflict(selectedPath, newPath, -1)
+                        ELSE
+                            opFiles = FileOpCopyFileWithConflict(selectedPath, newPath, 2)
+                        END IF
+                        IF opFiles > 0 THEN
+                            successCount = successCount + 1
+                        ELSEIF opFiles < 0 THEN
+                            fileOpProgressSkipped = fileOpProgressSkipped + 1
+                        ELSE
+                            failCount = failCount + 1
+                        END IF
+                        FileOpProgressUpdate selectedPath, newPath, successCount, 0, failCount, fileOpProgressSkipped, 0
                     END IF
                 END IF
             END IF
+            IF fileOpCancel <> 0 THEN EXIT DO
         LOOP
+        FileOpProgressEnd
 
-        IF successCount > 0 THEN
+        IF fileOpCancel <> 0 THEN
+            statusText = "Operation canceled"
+        ELSEIF successCount > 0 THEN
             ClearComboItemCache
             IF sourceWin >= LBOUND(layoutWindows) AND sourceWin <= UBOUND(layoutWindows) THEN
                 IF layoutWindows(sourceWin).used <> 0 THEN
-                    refreshDir = FileBrowserWindowCurrentDir(sourceWin)
-                    IF refreshDir <> "" THEN
-                        restoreWin = activeLayoutWindow
-                        ConfigureFileBrowserWindow sourceWin, refreshDir
-                        activeLayoutWindow = restoreWin
-                        IF activeLayoutWindow >= LBOUND(layoutWindows) AND activeLayoutWindow <= UBOUND(layoutWindows) THEN
-                            IF layoutWindows(activeLayoutWindow).used <> 0 THEN SyncGlobalsFromLayoutWindow activeLayoutWindow
-                        END IF
-                    END IF
+                    FileBrowserRefreshVisibleListsInPlace sourceWin
                 END IF
             END IF
         END IF
 
-        IF successCount = 0 THEN
+        IF fileOpCancel <> 0 THEN
+            statusText = "Operation canceled"
+        ELSEIF successCount = 0 THEN
             IF moveMode <> 0 THEN
                 statusText = "Move failed"
             ELSE
@@ -27845,6 +30139,418 @@ SUB FileBrowserCopyMoveListToDir(BYVAL sourceList AS STRING, BYVAL targetDir AS 
         END IF
     END IF
 END SUB
+
+
+SUB FileBrowserCopyMoveActiveToOpposite(BYVAL sourceWin AS INTEGER, BYVAL moveMode AS INTEGER, BYVAL statusControlName AS STRING)
+    DIM sourceControlName AS STRING
+    DIM targetControlName AS STRING
+    DIM sourceIdx AS INTEGER
+    DIM targetIdx AS INTEGER
+    DIM selectedName AS STRING
+    DIM selectedList AS STRING
+    DIM targetDir AS STRING
+    DIM statusText AS STRING
+    DIM restoreWin AS INTEGER
+
+    IF sourceWin < LBOUND(layoutWindows) OR sourceWin > UBOUND(layoutWindows) THEN EXIT SUB
+    IF layoutWindows(sourceWin).used = 0 THEN EXIT SUB
+    IF statusControlName = "" THEN statusControlName = AppControlNameValue(sourceWin, "FILE_BROWSER_STATUS_CONTROL", "")
+
+    restoreWin = activeLayoutWindow
+    activeLayoutWindow = sourceWin
+    SyncGlobalsFromLayoutWindow sourceWin
+
+    sourceControlName = FileBrowserResolveActionControlName(sourceWin, "ACTIVE", 2)
+    sourceIdx = GetControlIndexByName(sourceControlName)
+    IF FileBrowserListIsBrowserList(sourceIdx) = 0 THEN
+        IF moveMode <> 0 THEN statusText = "Move unavailable" ELSE statusText = "Copy unavailable"
+    ELSE
+        targetControlName = FileBrowserOppositeListName(sourceWin, sourceControlName)
+        targetIdx = GetControlIndexByName(targetControlName)
+        targetDir = FileBrowserOppositePathForList(sourceWin, sourceControlName)
+
+        IF targetControlName = "" OR FileBrowserListIsVisibleOnCurrentPage(targetIdx) = 0 OR targetDir = "" THEN
+            IF moveMode <> 0 THEN statusText = "Move target unavailable" ELSE statusText = "Copy target unavailable"
+        ELSE
+            selectedName = ControlValueFromListControl(sourceIdx)
+            selectedList = ListSelectionBrowserPaths(sourceWin, sourceIdx, selectedName)
+            IF selectedList = "" THEN
+                IF LEFT$(UCASE$(selectedName), 2) = "D:" THEN
+                    selectedList = AbsoluteDirPath(MID$(selectedName, 3))
+                ELSEIF LEFT$(UCASE$(selectedName), 2) = "F:" THEN
+                    selectedList = NormalizePath(MID$(selectedName, 3))
+                ELSEIF selectedName <> "" THEN
+                    selectedList = NormalizePath(selectedName)
+                END IF
+            END IF
+
+            IF DelimitedListCount(selectedList) < 1 THEN
+                IF moveMode <> 0 THEN statusText = "Move unavailable" ELSE statusText = "Copy unavailable"
+            ELSE
+                FileBrowserCopyMoveListToDir selectedList, targetDir, moveMode, sourceWin, statusControlName
+                activeLayoutWindow = restoreWin
+                IF activeLayoutWindow >= LBOUND(layoutWindows) AND activeLayoutWindow <= UBOUND(layoutWindows) THEN
+                    IF layoutWindows(activeLayoutWindow).used <> 0 THEN SyncGlobalsFromLayoutWindow activeLayoutWindow
+                END IF
+                EXIT SUB
+            END IF
+        END IF
+    END IF
+
+    IF statusControlName <> "" THEN SetTextboxTextByName statusControlName, statusText
+    SyncLayoutWindowFromGlobals sourceWin
+    activeLayoutWindow = restoreWin
+    IF activeLayoutWindow >= LBOUND(layoutWindows) AND activeLayoutWindow <= UBOUND(layoutWindows) THEN
+        IF layoutWindows(activeLayoutWindow).used <> 0 THEN SyncGlobalsFromLayoutWindow activeLayoutWindow
+    END IF
+END SUB
+
+' ---------------------------
+' Generic app menu bar support
+' ---------------------------
+
+SUB AppMenuClose()
+    appMenuOpenWin = 0
+    appMenuOpenElem = 0
+    appMenuOpenTop = 0
+END SUB
+
+FUNCTION AppMenuTopSpec(BYVAL winIdx AS INTEGER, BYVAL topIdx AS INTEGER) AS STRING
+    DIM appPath AS STRING
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN RETURN ""
+    IF layoutWindows(winIdx).used = 0 THEN RETURN ""
+    IF topIdx < 1 THEN RETURN ""
+
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    RETURN TRIM$(AppCfgValue(appPath, "APP_MENU_" + LTRIM$(STR$(topIdx)), ""))
+END FUNCTION
+
+FUNCTION AppMenuTopCaption(BYVAL winIdx AS INTEGER, BYVAL topIdx AS INTEGER) AS STRING
+    DIM specText AS STRING
+
+    specText = AppMenuTopSpec(winIdx, topIdx)
+    RETURN TRIM$(PipePart(specText, 1))
+END FUNCTION
+
+FUNCTION AppMenuTopSection(BYVAL winIdx AS INTEGER, BYVAL topIdx AS INTEGER) AS STRING
+    DIM specText AS STRING
+    DIM sectionName AS STRING
+    DIM i AS INTEGER
+    DIM ch AS STRING
+    DIM captionText AS STRING
+
+    specText = AppMenuTopSpec(winIdx, topIdx)
+    sectionName = TRIM$(PipePart(specText, 2))
+    IF sectionName <> "" THEN RETURN sectionName
+
+    captionText = UCASE$(TRIM$(PipePart(specText, 1)))
+    sectionName = "APP_MENU_"
+    FOR i = 1 TO LEN(captionText)
+        ch = MID$(captionText, i, 1)
+        IF (ch >= "A" AND ch <= "Z") OR (ch >= "0" AND ch <= "9") THEN
+            sectionName = sectionName + ch
+        ELSEIF ch = " " OR ch = "_" OR ch = "-" THEN
+            sectionName = sectionName + "_"
+        END IF
+    NEXT
+
+    RETURN sectionName
+END FUNCTION
+
+FUNCTION AppMenuTopCount(BYVAL winIdx AS INTEGER) AS INTEGER
+    DIM i AS INTEGER
+    DIM specText AS STRING
+
+    FOR i = 1 TO 16
+        specText = AppMenuTopSpec(winIdx, i)
+        IF TRIM$(specText) = "" THEN RETURN i - 1
+    NEXT
+
+    RETURN 16
+END FUNCTION
+
+FUNCTION AppMenuItemSpec(BYVAL winIdx AS INTEGER, BYVAL sectionName AS STRING, BYVAL itemIdx AS INTEGER) AS STRING
+    DIM appPath AS STRING
+
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN RETURN ""
+    IF layoutWindows(winIdx).used = 0 THEN RETURN ""
+    IF TRIM$(sectionName) = "" THEN RETURN ""
+    IF itemIdx < 1 THEN RETURN ""
+
+    appPath = RTRIM$(layoutWindows(winIdx).appPath)
+    RETURN TRIM$(AppCfgValue(appPath, sectionName + "_" + LTRIM$(STR$(itemIdx)), ""))
+END FUNCTION
+
+FUNCTION AppMenuItemCaption(BYVAL itemSpec AS STRING) AS STRING
+    RETURN TRIM$(PipePart(itemSpec, 1))
+END FUNCTION
+
+FUNCTION AppMenuItemAction(BYVAL itemSpec AS STRING) AS STRING
+    RETURN TRIM$(PipePart(itemSpec, 2))
+END FUNCTION
+
+SUB AppMenuTopRect(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL topIdx AS INTEGER, BYREF rx1 AS INTEGER, BYREF ry1 AS INTEGER, BYREF rx2 AS INTEGER, BYREF ry2 AS INTEGER)
+    DIM i AS INTEGER
+    DIM ex AS INTEGER
+    DIM ey AS INTEGER
+    DIM eh AS INTEGER
+    DIM w AS INTEGER
+    DIM captionText AS STRING
+
+    rx1 = 0: ry1 = 0: rx2 = -1: ry2 = -1
+    IF elemIdx < 1 OR elemIdx > uiCount THEN EXIT SUB
+    IF uiElems(elemIdx).kindId <> UI_KIND_MENUBAR THEN EXIT SUB
+    IF topIdx < 1 THEN EXIT SUB
+
+    ex = uiWinX + uiElems(elemIdx).x - uiScrollX
+    ey = uiWinY + 22 + uiElems(elemIdx).y - uiScrollY
+    eh = uiElems(elemIdx).h
+    IF eh <= 0 THEN eh = 20
+
+    rx1 = ex + 4
+    FOR i = 1 TO topIdx - 1
+        captionText = AppMenuTopCaption(winIdx, i)
+        IF captionText = "" THEN EXIT SUB
+        w = LEN(captionText) * 8 + 18
+        rx1 = rx1 + w
+    NEXT
+
+    captionText = AppMenuTopCaption(winIdx, topIdx)
+    IF captionText = "" THEN EXIT SUB
+    w = LEN(captionText) * 8 + 18
+    rx2 = rx1 + w - 1
+    ry1 = ey + 1
+    ry2 = ey + eh - 2
+END SUB
+
+SUB AppMenuPanelRect(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL topIdx AS INTEGER, BYREF rx1 AS INTEGER, BYREF ry1 AS INTEGER, BYREF rx2 AS INTEGER, BYREF ry2 AS INTEGER)
+    DIM topX1 AS INTEGER
+    DIM topY1 AS INTEGER
+    DIM topX2 AS INTEGER
+    DIM topY2 AS INTEGER
+    DIM sectionName AS STRING
+    DIM specText AS STRING
+    DIM captionText AS STRING
+    DIM maxChars AS INTEGER
+    DIM itemCount AS INTEGER
+    DIM i AS INTEGER
+    DIM panelW AS INTEGER
+    DIM panelH AS INTEGER
+
+    rx1 = 0: ry1 = 0: rx2 = -1: ry2 = -1
+    AppMenuTopRect winIdx, elemIdx, topIdx, topX1, topY1, topX2, topY2
+    IF topX2 < topX1 THEN EXIT SUB
+
+    sectionName = AppMenuTopSection(winIdx, topIdx)
+    maxChars = 0
+    itemCount = 0
+    FOR i = 1 TO 32
+        specText = AppMenuItemSpec(winIdx, sectionName, i)
+        IF specText = "" THEN EXIT FOR
+        itemCount = itemCount + 1
+        captionText = AppMenuItemCaption(specText)
+        IF captionText <> "-" AND LEN(captionText) > maxChars THEN maxChars = LEN(captionText)
+    NEXT
+    IF itemCount <= 0 THEN EXIT SUB
+
+    panelW = maxChars * 8 + 28
+    IF panelW < 96 THEN panelW = 96
+    panelH = itemCount * 18 + 6
+    rx1 = topX1
+    ry1 = topY2 + 1
+    rx2 = rx1 + panelW
+    ry2 = ry1 + panelH
+    IF rx2 > uiWinX + uiWinW - 2 THEN
+        rx1 = uiWinX + uiWinW - 2 - panelW
+        rx2 = rx1 + panelW
+    END IF
+    IF rx1 < uiWinX + 2 THEN rx1 = uiWinX + 2
+END SUB
+
+FUNCTION AppMenuHitTop(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER) AS INTEGER
+    DIM i AS INTEGER
+    DIM rx1 AS INTEGER
+    DIM ry1 AS INTEGER
+    DIM rx2 AS INTEGER
+    DIM ry2 AS INTEGER
+    DIM topCount AS INTEGER
+
+    topCount = AppMenuTopCount(winIdx)
+    FOR i = 1 TO topCount
+        AppMenuTopRect winIdx, elemIdx, i, rx1, ry1, rx2, ry2
+        IF rx2 >= rx1 THEN
+            IF mouseX >= rx1 AND mouseX <= rx2 AND mouseY >= ry1 AND mouseY <= ry2 THEN RETURN i
+        END IF
+    NEXT
+
+    RETURN 0
+END FUNCTION
+
+FUNCTION AppMenuHitItem(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL topIdx AS INTEGER, BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER) AS INTEGER
+    DIM rx1 AS INTEGER
+    DIM ry1 AS INTEGER
+    DIM rx2 AS INTEGER
+    DIM ry2 AS INTEGER
+    DIM itemIdx AS INTEGER
+    DIM rowY AS INTEGER
+    DIM sectionName AS STRING
+    DIM specText AS STRING
+
+    AppMenuPanelRect winIdx, elemIdx, topIdx, rx1, ry1, rx2, ry2
+    IF rx2 < rx1 THEN RETURN 0
+    IF mouseX < rx1 OR mouseX > rx2 OR mouseY < ry1 OR mouseY > ry2 THEN RETURN 0
+
+    sectionName = AppMenuTopSection(winIdx, topIdx)
+    FOR itemIdx = 1 TO 32
+        specText = AppMenuItemSpec(winIdx, sectionName, itemIdx)
+        IF specText = "" THEN EXIT FOR
+        rowY = ry1 + 3 + (itemIdx - 1) * 18
+        IF mouseY >= rowY AND mouseY <= rowY + 17 THEN RETURN itemIdx
+    NEXT
+
+    RETURN 0
+END FUNCTION
+
+FUNCTION AppMenuPointHitsElement(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER) AS INTEGER
+    DIM ex AS INTEGER
+    DIM ey AS INTEGER
+    DIM ew AS INTEGER
+    DIM eh AS INTEGER
+    DIM rx1 AS INTEGER
+    DIM ry1 AS INTEGER
+    DIM rx2 AS INTEGER
+    DIM ry2 AS INTEGER
+
+    IF elemIdx < 1 OR elemIdx > uiCount THEN RETURN 0
+    IF uiElems(elemIdx).kindId <> UI_KIND_MENUBAR THEN RETURN 0
+
+    ex = uiWinX + uiElems(elemIdx).x - uiScrollX
+    ey = uiWinY + 22 + uiElems(elemIdx).y - uiScrollY
+    ew = uiElems(elemIdx).w
+    eh = uiElems(elemIdx).h
+    IF ew <= 0 THEN ew = uiWinW - 4
+    IF eh <= 0 THEN eh = 20
+    IF mouseX >= ex AND mouseX <= ex + ew AND mouseY >= ey AND mouseY <= ey + eh THEN RETURN -1
+
+    IF appMenuOpenWin = winIdx AND appMenuOpenElem = elemIdx AND appMenuOpenTop > 0 THEN
+        AppMenuPanelRect winIdx, elemIdx, appMenuOpenTop, rx1, ry1, rx2, ry2
+        IF rx2 >= rx1 THEN
+            IF mouseX >= rx1 AND mouseX <= rx2 AND mouseY >= ry1 AND mouseY <= ry2 THEN RETURN -1
+        END IF
+    END IF
+
+    RETURN 0
+END FUNCTION
+
+SUB DrawAppMenuBarElement(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL ex AS INTEGER, BYVAL ey AS INTEGER, BYVAL ew AS INTEGER, BYVAL eh AS INTEGER, BYVAL clipL AS INTEGER, BYVAL clipT AS INTEGER, BYVAL clipR AS INTEGER, BYVAL clipB AS INTEGER)
+    DIM topCount AS INTEGER
+    DIM topIdx AS INTEGER
+    DIM rx1 AS INTEGER
+    DIM ry1 AS INTEGER
+    DIM rx2 AS INTEGER
+    DIM ry2 AS INTEGER
+    DIM captionText AS STRING
+    DIM textCol AS UINTEGER
+
+    IF ew <= 0 THEN ew = uiWinW - 4
+    IF eh <= 0 THEN eh = 20
+    IF RectIntersectsClip(ex, ey, ex + ew, ey + eh, clipL, clipT, clipR, clipB) = 0 THEN EXIT SUB
+
+    FillRectClipped ex, ey, ex + ew, ey + eh, clipL, clipT, clipR, clipB, COL_BUTTON
+    LineHClipped ex, ex + ew, ey + eh, clipL, clipT, clipR, clipB, COL_BEVEL_LO
+
+    topCount = AppMenuTopCount(winIdx)
+    FOR topIdx = 1 TO topCount
+        captionText = AppMenuTopCaption(winIdx, topIdx)
+        IF captionText <> "" THEN
+            AppMenuTopRect winIdx, elemIdx, topIdx, rx1, ry1, rx2, ry2
+            textCol = COL_TEXT
+            IF appMenuOpenWin = winIdx AND appMenuOpenElem = elemIdx AND appMenuOpenTop = topIdx THEN
+                FillRectClipped rx1, ry1, rx2, ry2, clipL, clipT, clipR, clipB, COL_SELECT
+                textCol = COL_SELECTED_TEXT
+            END IF
+            DrawStringRefClipped rx1 + 8, ey + ((eh - 8) \ 2), captionText, textCol, clipL, clipT, clipR, clipB
+        END IF
+    NEXT
+END SUB
+
+SUB DrawOpenAppMenu(BYVAL winIdx AS INTEGER)
+    DIM rx1 AS INTEGER
+    DIM ry1 AS INTEGER
+    DIM rx2 AS INTEGER
+    DIM ry2 AS INTEGER
+    DIM rowY AS INTEGER
+    DIM itemIdx AS INTEGER
+    DIM sectionName AS STRING
+    DIM specText AS STRING
+    DIM captionText AS STRING
+
+    IF appMenuOpenWin <> winIdx THEN EXIT SUB
+    IF appMenuOpenElem < 1 OR appMenuOpenElem > uiCount THEN EXIT SUB
+    IF appMenuOpenTop < 1 THEN EXIT SUB
+    IF uiElems(appMenuOpenElem).kindId <> UI_KIND_MENUBAR THEN EXIT SUB
+
+    AppMenuPanelRect winIdx, appMenuOpenElem, appMenuOpenTop, rx1, ry1, rx2, ry2
+    IF rx2 < rx1 THEN EXIT SUB
+
+    Draw3DRect rx1, ry1, rx2, ry2, 1
+    LINE (rx1, ry1)-(rx2, ry2), COL_BEVEL_LO, B
+    FillRectClipped rx1 + 2, ry1 + 2, rx2 - 2, ry2 - 2, 0, 0, SCR_W - 1, SCR_H - 1, COL_CONTROL_BG
+
+    sectionName = AppMenuTopSection(winIdx, appMenuOpenTop)
+    FOR itemIdx = 1 TO 32
+        specText = AppMenuItemSpec(winIdx, sectionName, itemIdx)
+        IF specText = "" THEN EXIT FOR
+        captionText = AppMenuItemCaption(specText)
+        rowY = ry1 + 3 + (itemIdx - 1) * 18
+        IF captionText = "-" THEN
+            LINE (rx1 + 8, rowY + 8)-(rx2 - 8, rowY + 8), COL_BEVEL_LO
+            LINE (rx1 + 8, rowY + 9)-(rx2 - 8, rowY + 9), COL_BEVEL_HI
+        ELSE
+            DrawStringRefClipped rx1 + 12, rowY + 5, captionText, COL_TEXT, 0, 0, SCR_W - 1, SCR_H - 1
+        END IF
+    NEXT
+END SUB
+
+FUNCTION AppMenuHandleClick(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS INTEGER, BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER) AS INTEGER
+    DIM topIdx AS INTEGER
+    DIM itemIdx AS INTEGER
+    DIM sectionName AS STRING
+    DIM itemSpec AS STRING
+    DIM itemAction AS STRING
+
+    AppMenuHandleClick = 0
+    IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT FUNCTION
+    IF layoutWindows(winIdx).used = 0 THEN EXIT FUNCTION
+    IF elemIdx < 1 OR elemIdx > uiCount THEN EXIT FUNCTION
+    IF uiElems(elemIdx).kindId <> UI_KIND_MENUBAR THEN EXIT FUNCTION
+
+    IF appMenuOpenWin = winIdx AND appMenuOpenElem = elemIdx AND appMenuOpenTop > 0 THEN
+        itemIdx = AppMenuHitItem(winIdx, elemIdx, appMenuOpenTop, mouseX, mouseY)
+        IF itemIdx > 0 THEN
+            sectionName = AppMenuTopSection(winIdx, appMenuOpenTop)
+            itemSpec = AppMenuItemSpec(winIdx, sectionName, itemIdx)
+            itemAction = AppMenuItemAction(itemSpec)
+            AppMenuClose
+            SyncLayoutWindowFromGlobals winIdx
+            IF itemAction <> "" AND AppMenuItemCaption(itemSpec) <> "-" THEN HostAppAction winIdx, itemAction
+            AppMenuHandleClick = -1
+            EXIT FUNCTION
+        END IF
+    END IF
+
+    topIdx = AppMenuHitTop(winIdx, elemIdx, mouseX, mouseY)
+    IF topIdx > 0 THEN
+        appMenuOpenWin = winIdx
+        appMenuOpenElem = elemIdx
+        appMenuOpenTop = topIdx
+        AppMenuHandleClick = -1
+        EXIT FUNCTION
+    END IF
+
+    IF appMenuOpenWin = winIdx THEN AppMenuClose
+END FUNCTION
 
 ' ---------------------------
 ' Generic host actions called by APP/SYS files
@@ -27922,7 +30628,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     DIM dirControlName AS STRING
     DIM fileControlName AS STRING
     DIM pathControlName AS STRING
+    DIM statsControlName AS STRING
     DIM nameControlName AS STRING
+    DIM driveControlName AS STRING
     DIM selectedDir AS STRING
     DIM selectedName AS STRING
     DIM newFileName AS STRING
@@ -27955,6 +30663,7 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     DIM deleteDialogWin AS INTEGER
     DIM restoreWin AS INTEGER
     DIM propItemIsDir AS INTEGER
+    DIM itemIsDir AS INTEGER
     DIM copyActionText AS STRING
     DIM clipMode AS STRING
     DIM duplicatePath AS STRING
@@ -28030,10 +30739,75 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     DIM keyFlagsValue AS INTEGER
     DIM keyDownName AS STRING
     DIM keyDownVar AS STRING
+    DIM layoutPageText AS STRING
+    DIM layoutTabNumber AS INTEGER
+    DIM layoutTargetTab AS INTEGER
+    DIM layoutPageFound AS INTEGER
 
     IF ParseActionHeaderCached(actIn, actRaw, act, args) = 0 THEN EXIT SUB
 
     SELECT CASE act
+    CASE "APP_KEY_ACTION"
+        keyTextValue = UCASE$(TRIM$(NextActionToken(args)))
+        sysActionText = ""
+        IF keyTextValue <> "" THEN
+            IF winIdx >= LBOUND(layoutWindows) AND winIdx <= UBOUND(layoutWindows) THEN
+                IF layoutWindows(winIdx).used <> 0 THEN
+                    sysActionText = TRIM$(AppCfgValue(RTRIM$(layoutWindows(winIdx).appPath), "KEY_" + keyTextValue + "_ACTION", ""))
+                END IF
+            END IF
+        END IF
+        IF sysActionText <> "" THEN
+            IF UCASE$(LEFT$(TRIM$(sysActionText), 14)) <> "APP_KEY_ACTION" THEN HostAppAction winIdx, sysActionText
+        END IF
+
+    CASE "LAYOUT_SELECT_PAGE", "LAYOUT_SELECT_TAB"
+        layoutPageText = UCASE$(TRIM$(NextActionToken(args)))
+        layoutTargetTab = VALINT(layoutPageText)
+        layoutTabNumber = 0
+        layoutPageFound = 0
+        FOR i = 1 TO uiCount
+            IF uiElems(i).kindId = UI_KIND_TAB THEN
+                layoutTabNumber = layoutTabNumber + 1
+                IF layoutTargetTab > 0 THEN
+                    IF layoutTabNumber = layoutTargetTab THEN
+                        uiSelectedTab = layoutTabNumber
+                        layoutPageFound = -1
+                        EXIT FOR
+                    END IF
+                ELSEIF UCASE$(TRIM$(uiElems(i).text)) = layoutPageText THEN
+                    uiSelectedTab = layoutTabNumber
+                    layoutPageFound = -1
+                    EXIT FOR
+                END IF
+            END IF
+        NEXT
+        IF layoutPageFound = 0 THEN
+            IF layoutTargetTab > 0 THEN
+                IF LayoutDeclaredPageName(layoutTargetTab) <> "" THEN
+                    uiSelectedTab = layoutTargetTab
+                    layoutPageFound = -1
+                END IF
+            ELSE
+                layoutTargetTab = LayoutDeclaredPageIndex(layoutPageText)
+                IF layoutTargetTab > 0 THEN
+                    uiSelectedTab = layoutTargetTab
+                    layoutPageFound = -1
+                END IF
+            END IF
+        END IF
+        IF winIdx >= LBOUND(layoutWindows) AND winIdx <= UBOUND(layoutWindows) THEN
+            IF layoutWindows(winIdx).used <> 0 THEN
+                layoutWindows(winIdx).selectedTab = uiSelectedTab
+                uiFocusIndex = 0
+                layoutWindows(winIdx).focusIndex = 0
+                FileBrowserEnsureActiveListForPage winIdx
+                MarkLayoutWindowVisualDirty winIdx
+                MarkLayoutWindowDirty winIdx
+                SyncLayoutWindowFromGlobals winIdx
+            END IF
+        END IF
+
     CASE "APPLY_BINDINGS"
         ApplyBindingsFromControls
 
@@ -30314,10 +33088,163 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         IF selectedDir = "" THEN selectedDir = "."
         ConfigureFileBrowserWindow winIdx, selectedDir
 
+    CASE "FILE_BROWSER_TOGGLE_COLORS"
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        FileBrowserToggleColors winIdx, controlName
+
+    CASE "FILE_BROWSER_SET_SORT"
+        selectedDir = NextActionToken(args)
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        FileBrowserSetSortMode winIdx, selectedDir, controlName
+
+    CASE "FILE_BROWSER_MASK_DIALOG"
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        dlgPath = AppDialogPath(winIdx, "FILTER_DIALOG", "")
+        IF dlgPath = "" OR DIR(LayoutFilePath(dlgPath)) = "" THEN
+            IF controlName <> "" THEN SetTextboxTextByName controlName, "Filter dialog unavailable"
+        ELSE
+            SyncLayoutWindowFromGlobals winIdx
+            ShowFileBrowserMaskDialog dlgPath, winIdx, controlName
+        END IF
+
+    CASE "FILE_BROWSER_SET_MASK"
+        controlName = NextActionToken(args)
+        selectedDir = ""
+        IF controlName <> "" THEN selectedDir = GetTextboxTextByName(controlName)
+        IF fileBrowserMaskSourceWin >= LBOUND(layoutWindows) AND fileBrowserMaskSourceWin <= UBOUND(layoutWindows) THEN
+            IF layoutWindows(fileBrowserMaskSourceWin).used <> 0 THEN
+                FileBrowserApplyMask fileBrowserMaskSourceWin, selectedDir, fileBrowserMaskStatusControl
+            END IF
+        END IF
+
+    CASE "FILE_BROWSER_CLEAR_MASK"
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        FileBrowserApplyMask winIdx, "", controlName
+
+    CASE "FILE_BROWSER_PATH_GO"
+        pathControlName = NextActionToken(args)
+        fileControlName = NextActionToken(args)
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        selectedDir = ""
+        pathControlName = FileBrowserResolvePathControlName(winIdx, pathControlName)
+        IF pathControlName <> "" THEN selectedDir = GetTextboxTextByName(pathControlName)
+        FileBrowserNavigateToPath winIdx, pathControlName, fileControlName, controlName, selectedDir, "Opened"
+
+    CASE "FILE_BROWSER_PATH_UP"
+        pathControlName = NextActionToken(args)
+        fileControlName = NextActionToken(args)
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        pathControlName = FileBrowserResolvePathControlName(winIdx, pathControlName)
+        selectedDir = ""
+        IF pathControlName <> "" THEN selectedDir = GetTextboxTextByName(pathControlName)
+        selectedDir = AbsoluteDirPath(selectedDir)
+        IF selectedDir = "" THEN selectedDir = FileBrowserWindowCurrentDir(winIdx)
+        statusText = ParentPath(selectedDir)
+        IF statusText = "" THEN statusText = selectedDir
+        FileBrowserNavigateToPath winIdx, pathControlName, fileControlName, controlName, statusText, "Opened"
+
+    CASE "FILE_BROWSER_PATH_ROOT"
+        pathControlName = NextActionToken(args)
+        fileControlName = NextActionToken(args)
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        pathControlName = FileBrowserResolvePathControlName(winIdx, pathControlName)
+        selectedDir = ""
+        IF pathControlName <> "" THEN selectedDir = GetTextboxTextByName(pathControlName)
+        IF selectedDir = "" THEN selectedDir = FileBrowserWindowCurrentDir(winIdx)
+        FileBrowserNavigateToPath winIdx, pathControlName, fileControlName, controlName, FileBrowserRootPath(selectedDir), "Opened"
+
+    CASE "FILE_BROWSER_DRIVE_SELECT"
+        driveControlName = NextActionToken(args)
+        pathControlName = NextActionToken(args)
+        fileControlName = NextActionToken(args)
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        selectedDir = ""
+        clearIdx = GetControlIndexByName(driveControlName)
+        IF clearIdx >= 1 AND clearIdx <= uiCount THEN
+            IF uiElems(clearIdx).kindId = UI_KIND_LISTBOX OR uiElems(clearIdx).kindId = UI_KIND_COMBO THEN selectedDir = FileCfgControlValue(driveControlName)
+        END IF
+        IF LEFT$(UCASE$(selectedDir), 2) = "V:" THEN selectedDir = MID$(selectedDir, 3)
+        IF LEN(selectedDir) = 2 AND MID$(selectedDir, 2, 1) = ":" THEN selectedDir = selectedDir + CHR$(92)
+        IF selectedDir <> "" THEN FileBrowserNavigateToPath winIdx, pathControlName, fileControlName, controlName, selectedDir, "Opened"
+
+    CASE "FILE_BROWSER_PANE_REFRESH"
+        fileControlName = NextActionToken(args)
+        pathControlName = NextActionToken(args)
+        statsControlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 0)
+        IF fileControlName = "" THEN fileControlName = FileBrowserResolveActionControlName(winIdx, "ACTIVE", -1)
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
+        pathControlName = FileBrowserResolvePathControlName(winIdx, pathControlName)
+        IF pathControlName = "" AND fileControlName <> "" THEN pathControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL_" + UCASE$(TRIM$(fileControlName)), "")
+        IF pathControlName = "" THEN pathControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL", "")
+        IF statsControlName = "" THEN statsControlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATS_CONTROL", "")
+        selectedDir = GetTextboxTextByName(pathControlName)
+        ConfigureFileBrowserPane winIdx, fileControlName, pathControlName, statsControlName, selectedDir
+
+    CASE "FILE_BROWSER_PANE_OPEN"
+        fileControlName = NextActionToken(args)
+        pathControlName = NextActionToken(args)
+        controlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 0)
+        IF fileControlName = "" THEN fileControlName = FileBrowserResolveActionControlName(winIdx, "ACTIVE", -1)
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
+        pathControlName = FileBrowserResolvePathControlName(winIdx, pathControlName)
+        IF pathControlName = "" AND fileControlName <> "" THEN pathControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL_" + UCASE$(TRIM$(fileControlName)), "")
+        IF pathControlName = "" THEN pathControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL", "")
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+
+        selectedName = ""
+        clearIdx = GetControlIndexByName(fileControlName)
+        IF clearIdx >= 1 AND clearIdx <= uiCount THEN
+            IF uiElems(clearIdx).kindId = UI_KIND_LISTBOX THEN selectedName = ControlValueFromListControl(clearIdx)
+        END IF
+
+        selectedPath = ""
+        IF LEFT$(UCASE$(selectedName), 2) = "D:" THEN
+            selectedPath = AbsoluteDirPath(MID$(selectedName, 3))
+            IF selectedPath <> "" THEN
+                SetTextboxTextByName controlName, "Opened " + selectedPath
+                ConfigureFileBrowserPane winIdx, fileControlName, pathControlName, statsControlName, selectedPath
+            END IF
+        ELSEIF LEFT$(UCASE$(selectedName), 2) = "F:" THEN
+            selectedPath = NormalizePath(MID$(selectedName, 3))
+        ELSEIF selectedName <> "" THEN
+            selectedPath = NormalizePath(selectedName)
+        END IF
+
+        IF selectedPath <> "" AND LEFT$(UCASE$(selectedName), 2) <> "D:" THEN
+            assocExtName = FileExtensionOf(selectedPath)
+            assocActionText = LookupFileAssociation(selectedPath)
+            IF assocExtName = "" THEN assocExtName = "(none)"
+            IF assocActionText = "" THEN
+                statusText = "Ext=" + assocExtName + "  Action=NO ASSOCIATION"
+                SetTextboxTextByName controlName, statusText
+            ELSEIF LEFT$(UCASE$(assocActionText), 4) = "APP:" OR _
+                   ((assocExtName = "EXE" OR assocExtName = "COM" OR assocExtName = "BAT") AND UCASE$(assocActionText) = "RUN") OR _
+                   LEFT$(UCASE$(assocActionText), 8) = "APPFILE:" THEN
+                statusText = "Opening " + selectedPath + "  Action=" + assocActionText
+                SetTextboxTextByName controlName, statusText
+                OpenFileByAssociation selectedPath, assocActionText
+            ELSE
+                statusText = "Ext=" + assocExtName + "  Action=" + assocActionText
+                SetTextboxTextByName controlName, statusText
+            END IF
+        END IF
+
     CASE "FILE_BROWSER_DIR_SELECT"
         dirControlName = NextActionToken(args)
         fileControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        dirControlName = FileBrowserResolveActionControlName(winIdx, dirControlName, -1)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 0)
         IF dirControlName = "" THEN dirControlName = AppControlNameValue(winIdx, "FILE_BROWSER_DIR_CONTROL", "")
         IF fileControlName = "" THEN fileControlName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL", "")
@@ -30337,6 +33264,7 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_DIR_NEW"
         dirControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        dirControlName = FileBrowserResolveActionControlName(winIdx, dirControlName, -1)
         IF dirControlName = "" THEN dirControlName = AppControlNameValue(winIdx, "FILE_BROWSER_DIR_CONTROL", "")
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
@@ -30374,6 +33302,7 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_DIR_OPEN_NEW"
         dirControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        dirControlName = FileBrowserResolveActionControlName(winIdx, dirControlName, -1)
         IF dirControlName = "" THEN dirControlName = AppControlNameValue(winIdx, "FILE_BROWSER_DIR_CONTROL", "")
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
@@ -30431,7 +33360,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_DIR_COPY"
         dirControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        dirControlName = FileBrowserResolveActionControlName(winIdx, dirControlName, -1)
         IF dirControlName = "" THEN dirControlName = AppControlNameValue(winIdx, "FILE_BROWSER_DIR_CONTROL", "")
+        IF dirControlName <> "" THEN FileBrowserSetActiveListByName winIdx, dirControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
         selectedDir = ""
@@ -30456,6 +33387,8 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
             ELSE
                 statusText = "Copy directory " + selectedDir
                 SetTextboxTextByName controlName, statusText
+                fileBrowserDialogDefaultDestDir = FileBrowserOppositePathForList(winIdx, dirControlName)
+                fileBrowserDialogDefaultDestControl = AppControlNameValue(winIdx, "COPY_DIALOG_DEST_CONTROL", "")
                 SyncLayoutWindowFromGlobals activeLayoutWindow
                 ShowDirectoryCopy selectedDir, dlgPath, winIdx
             END IF
@@ -30493,8 +33426,16 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
                 copyFilesDone = 0
                 copyDirsDone = 0
                 copyFails = 0
-                CopyDirectoryTree selectedDir, copyTargetDir, copyFilesOpt, copySubDirsOpt, copyEmptyOpt, copyHiddenOpt, copyOverwriteOpt, copyFilesDone, copyDirsDone, copyFails
-                IF copyFails > 0 THEN
+                FileOpProgressBegin copySourceWin, "COPY"
+                IF copyOverwriteOpt <> 0 THEN
+                    CopyDirectoryTree selectedDir, copyTargetDir, copyFilesOpt, copySubDirsOpt, copyEmptyOpt, copyHiddenOpt, -1, copyFilesDone, copyDirsDone, copyFails
+                ELSE
+                    CopyDirectoryTree selectedDir, copyTargetDir, copyFilesOpt, copySubDirsOpt, copyEmptyOpt, copyHiddenOpt, 2, copyFilesDone, copyDirsDone, copyFails
+                END IF
+                FileOpProgressEnd
+                IF fileOpCancel <> 0 THEN
+                    statusText = "Copy canceled"
+                ELSEIF copyFails > 0 THEN
                     statusText = "Copied " + LTRIM$(STR$(copyFilesDone)) + " files, " + LTRIM$(STR$(copyDirsDone)) + " folders, failed " + LTRIM$(STR$(copyFails))
                 ELSE
                     statusText = "Copied " + LTRIM$(STR$(copyFilesDone)) + " files, " + LTRIM$(STR$(copyDirsDone)) + " folders"
@@ -30525,7 +33466,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_FILE_SELECT"
         fileControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 0)
         IF fileControlName = "" THEN fileControlName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
         selectedName = ""
@@ -30539,11 +33482,14 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         selectedPath = ""
         IF LEFT$(UCASE$(selectedName), 2) = "F:" THEN
             selectedPath = NormalizePath(MID$(selectedName, 3))
+        ELSEIF LEFT$(UCASE$(selectedName), 2) = "D:" THEN
+            selectedPath = AbsoluteDirPath(MID$(selectedName, 3))
+            IF selectedPath <> "" THEN SetTextboxTextByName controlName, "Folder: " + selectedPath
         ELSEIF selectedName <> "" THEN
             selectedPath = NormalizePath(selectedName)
         END IF
 
-        IF selectedPath <> "" THEN
+        IF selectedPath <> "" AND LEFT$(UCASE$(selectedName), 2) <> "D:" THEN
             assocExtName = FileExtensionOf(selectedPath)
             assocActionText = LookupFileAssociation(selectedPath)
             IF assocExtName = "" THEN assocExtName = "(none)"
@@ -30554,11 +33500,14 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
             END IF
             SetTextboxTextByName controlName, statusText
         END IF
+        FileBrowserUpdateSelectionStatus winIdx, clearIdx, controlName, 0
 
     CASE "FILE_BROWSER_FILE_OPEN"
         fileControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 2)
         IF fileControlName = "" THEN fileControlName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
         selectedName = ""
@@ -30572,11 +33521,17 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         selectedPath = ""
         IF LEFT$(UCASE$(selectedName), 2) = "F:" THEN
             selectedPath = NormalizePath(MID$(selectedName, 3))
+        ELSEIF LEFT$(UCASE$(selectedName), 2) = "D:" THEN
+            selectedPath = AbsoluteDirPath(MID$(selectedName, 3))
+            IF selectedPath <> "" THEN
+                SetTextboxTextByName controlName, "Opened " + selectedPath
+                ConfigureFileBrowserWindow winIdx, selectedPath
+            END IF
         ELSEIF selectedName <> "" THEN
             selectedPath = NormalizePath(selectedName)
         END IF
 
-        IF selectedPath <> "" THEN
+        IF selectedPath <> "" AND LEFT$(UCASE$(selectedName), 2) <> "D:" THEN
             assocExtName = FileExtensionOf(selectedPath)
             assocActionText = LookupFileAssociation(selectedPath)
             IF assocExtName = "" THEN assocExtName = "(none)"
@@ -30599,7 +33554,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_FILE_EDIT"
         fileControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 0)
         IF fileControlName = "" THEN fileControlName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
         selectedName = ""
@@ -30638,7 +33595,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_FILE_CUT"
         fileControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 2)
         IF fileControlName = "" THEN fileControlName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
         selectedName = ""
@@ -30647,7 +33606,7 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         IF clearIdx >= 1 AND clearIdx <= uiCount THEN
             IF uiElems(clearIdx).kindId = UI_KIND_LISTBOX THEN
                 selectedName = ControlValueFromListControl(clearIdx)
-                selectedList = ListSelectionFilePaths(winIdx, clearIdx, selectedName)
+                selectedList = ListSelectionBrowserPaths(winIdx, clearIdx, selectedName)
             END IF
         END IF
 
@@ -30657,10 +33616,13 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         ELSE
             fileBrowserClipboardPath = selectedList
             fileBrowserClipboardMode = "CUT"
+            fileBrowserClipboardDestList = FileBrowserOppositeListName(winIdx, fileControlName)
+            fileBrowserClipboardDestPathControl = FileBrowserOppositePathControlName(winIdx, fileControlName)
+            fileBrowserClipboardDestDir = FileBrowserOppositePathForList(winIdx, fileControlName)
             IF itemCount = 1 THEN
                 statusText = "Cut " + FileNameOnly(selectedList)
             ELSE
-                statusText = "Cut " + LTRIM$(STR$(itemCount)) + " files"
+                statusText = "Cut " + LTRIM$(STR$(itemCount)) + " items"
             END IF
         END IF
 
@@ -30669,7 +33631,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_FILE_COPY"
         fileControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 2)
         IF fileControlName = "" THEN fileControlName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
         selectedName = ""
@@ -30678,7 +33642,7 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         IF clearIdx >= 1 AND clearIdx <= uiCount THEN
             IF uiElems(clearIdx).kindId = UI_KIND_LISTBOX THEN
                 selectedName = ControlValueFromListControl(clearIdx)
-                selectedList = ListSelectionFilePaths(winIdx, clearIdx, selectedName)
+                selectedList = ListSelectionBrowserPaths(winIdx, clearIdx, selectedName)
             END IF
         END IF
 
@@ -30688,10 +33652,13 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         ELSE
             fileBrowserClipboardPath = selectedList
             fileBrowserClipboardMode = "COPY"
+            fileBrowserClipboardDestList = FileBrowserOppositeListName(winIdx, fileControlName)
+            fileBrowserClipboardDestPathControl = FileBrowserOppositePathControlName(winIdx, fileControlName)
+            fileBrowserClipboardDestDir = FileBrowserOppositePathForList(winIdx, fileControlName)
             IF itemCount = 1 THEN
                 statusText = "Copied " + FileNameOnly(selectedList)
             ELSE
-                statusText = "Copied " + LTRIM$(STR$(itemCount)) + " files"
+                statusText = "Copied " + LTRIM$(STR$(itemCount)) + " items"
             END IF
         END IF
 
@@ -30700,10 +33667,38 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_FILE_PASTE"
         dirControlName = NextActionToken(args)
         controlName = NextActionToken(args)
-        IF dirControlName = "" THEN dirControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL", "")
+        fileControlName = ""
+        selectedDir = ""
+
+        IF UCASE$(TRIM$(dirControlName)) = "FILE_BROWSER_CLIPBOARD_DEST_PATH" OR UCASE$(TRIM$(dirControlName)) = "CLIPBOARD_DEST_PATH" THEN
+            selectedDir = AbsoluteDirPath(TRIM$(fileBrowserClipboardDestDir))
+            fileControlName = TRIM$(fileBrowserClipboardDestList)
+            dirControlName = TRIM$(fileBrowserClipboardDestPathControl)
+            clearIdx = GetControlIndexByName(fileControlName)
+            IF FileBrowserListIsVisibleOnCurrentPage(clearIdx) = 0 THEN
+                selectedDir = ""
+                fileControlName = ""
+                dirControlName = ""
+            END IF
+        END IF
+
+        IF selectedDir = "" THEN
+            IF UCASE$(TRIM$(dirControlName)) = "FILE_BROWSER_ACTIVE_PATH" OR UCASE$(TRIM$(dirControlName)) = "ACTIVE_PATH" THEN
+                fileControlName = FileBrowserResolveActionControlName(winIdx, "ACTIVE", 0)
+                IF fileControlName = "" THEN fileControlName = FileBrowserResolveActionControlName(winIdx, "ACTIVE", -1)
+            ELSEIF UCASE$(TRIM$(dirControlName)) = "FILE_BROWSER_OPPOSITE_PATH" OR UCASE$(TRIM$(dirControlName)) = "OPPOSITE_PATH" THEN
+                fileControlName = FileBrowserResolveActionControlName(winIdx, "ACTIVE", 0)
+                IF fileControlName = "" THEN fileControlName = FileBrowserResolveActionControlName(winIdx, "ACTIVE", -1)
+                IF fileControlName <> "" THEN fileControlName = FileBrowserOppositeListName(winIdx, fileControlName)
+            END IF
+            dirControlName = FileBrowserResolvePathControlName(winIdx, dirControlName)
+            IF dirControlName = "" THEN dirControlName = AppControlNameValue(winIdx, "FILE_BROWSER_PATH_CONTROL", "")
+            selectedDir = AbsoluteDirPath(TRIM$(GetTextboxTextByName(dirControlName)))
+        END IF
+
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
-        selectedDir = AbsoluteDirPath(TRIM$(GetTextboxTextByName(dirControlName)))
         selectedList = TRIM$(fileBrowserClipboardPath)
         clipMode = UCASE$(TRIM$(fileBrowserClipboardMode))
         itemCount = DelimitedListCount(selectedList)
@@ -30715,6 +33710,11 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         ELSEIF selectedDir = "" THEN
             statusText = "Paste directory unavailable"
         ELSE
+            IF clipMode = "CUT" THEN
+                FileOpProgressBegin winIdx, "MOVE"
+            ELSE
+                FileOpProgressBegin winIdx, "COPY"
+            END IF
             itemList = selectedList
             DO WHILE itemList <> ""
                 sepPos = INSTR(itemList, CHR$(1))
@@ -30727,41 +33727,139 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
                 END IF
 
                 selectedPath = NormalizePath(TRIM$(itemPath))
+                itemIsDir = FileBrowserPathIsDirectory(selectedPath)
+                IF itemIsDir <> 0 THEN selectedPath = AbsoluteDirPath(selectedPath)
+
                 IF selectedPath = "" THEN
                     failCount = failCount + 1
-                ELSEIF DIR(selectedPath) = "" THEN
+                ELSEIF PathExistsAny(selectedPath) = 0 THEN
                     failCount = failCount + 1
                 ELSE
                     newPath = JoinPath(selectedDir, FileNameOnly(selectedPath))
                     IF UCASE$(NormalizePath(selectedPath)) = UCASE$(NormalizePath(newPath)) THEN
                         failCount = failCount + 1
-                    ELSEIF PathExistsAny(newPath) <> 0 THEN
+                    ELSEIF itemIsDir <> 0 AND FileBrowserDirDropUnsafe(selectedPath, selectedDir) <> 0 THEN
                         failCount = failCount + 1
+                    ELSEIF PathExistsAny(newPath) <> 0 THEN
+                        IF clipMode = "CUT" THEN
+                            copyOverwriteOpt = -1
+                        ELSE
+                            copyOverwriteOpt = 0
+                        END IF
+                        copyFilesDone = FileOpConflictChoice(newPath, itemIsDir, copyOverwriteOpt, winIdx)
+                        IF copyFilesDone = 2 THEN
+                            fileOpProgressSkipped = fileOpProgressSkipped + 1
+                        ELSEIF copyFilesDone = 5 THEN
+                            failCount = failCount + 1
+                        ELSEIF itemIsDir <> 0 THEN
+                            copyFilesDone = 0
+                            copyDirsDone = 0
+                            copyFails = 0
+                            CopyDirectoryTree selectedPath, newPath, -1, -1, -1, -1, 2, copyFilesDone, copyDirsDone, copyFails
+                            IF copyFails = 0 AND PathExistsAny(newPath) <> 0 THEN
+                                IF clipMode = "CUT" THEN
+                                    copyFilesDone = 0
+                                    copyDirsDone = 0
+                                    copyFails = 0
+                                    IF DeleteDirectoryTree(selectedPath, copyFilesDone, copyDirsDone, copyFails) <> 0 AND copyFails = 0 THEN
+                                        successCount = successCount + 1
+                                    ELSE
+                                        failCount = failCount + 1
+                                    END IF
+                                ELSE
+                                    successCount = successCount + 1
+                                END IF
+                            ELSE
+                                failCount = failCount + 1
+                            END IF
+                        ELSE
+                            copyFilesDone = FileOpCopyFileWithConflict(selectedPath, newPath, -1)
+                            IF copyFilesDone > 0 THEN
+                                IF clipMode = "CUT" THEN
+                                    IF DeleteFileSafe(selectedPath) <> 0 THEN successCount = successCount + 1 ELSE failCount = failCount + 1
+                                ELSE
+                                    successCount = successCount + 1
+                                END IF
+                            ELSEIF copyFilesDone < 0 THEN
+                                fileOpProgressSkipped = fileOpProgressSkipped + 1
+                            ELSE
+                                failCount = failCount + 1
+                            END IF
+                        END IF
+                    ELSEIF itemIsDir <> 0 THEN
+                        copyFilesDone = 0
+                        copyDirsDone = 0
+                        copyFails = 0
+                        IF clipMode = "CUT" THEN
+                            IF RenameFileSafe(selectedPath, newPath) <> 0 THEN
+                                successCount = successCount + 1
+                            ELSE
+                                CopyDirectoryTree selectedPath, newPath, -1, -1, -1, -1, 2, copyFilesDone, copyDirsDone, copyFails
+                                IF copyFails = 0 AND PathExistsAny(newPath) <> 0 THEN
+                                    copyFilesDone = 0
+                                    copyDirsDone = 0
+                                    copyFails = 0
+                                    IF DeleteDirectoryTree(selectedPath, copyFilesDone, copyDirsDone, copyFails) <> 0 AND copyFails = 0 THEN
+                                        successCount = successCount + 1
+                                    ELSE
+                                        failCount = failCount + 1
+                                    END IF
+                                ELSE
+                                    failCount = failCount + 1
+                                END IF
+                            END IF
+                        ELSE
+                            CopyDirectoryTree selectedPath, newPath, -1, -1, -1, -1, 2, copyFilesDone, copyDirsDone, copyFails
+                            IF copyFails = 0 AND PathExistsAny(newPath) <> 0 THEN
+                                successCount = successCount + 1
+                            ELSE
+                                failCount = failCount + 1
+                            END IF
+                        END IF
                     ELSEIF clipMode = "CUT" THEN
                         IF RenameFileSafe(selectedPath, newPath) <> 0 THEN
                             successCount = successCount + 1
                         ELSE
                             failCount = failCount + 1
                         END IF
-                    ELSEIF CopyFileSafe(selectedPath, newPath) <> 0 THEN
-                        successCount = successCount + 1
                     ELSE
-                        failCount = failCount + 1
+                        copyFilesDone = FileOpCopyFileWithConflict(selectedPath, newPath, 2)
+                        IF copyFilesDone > 0 THEN
+                            successCount = successCount + 1
+                        ELSEIF copyFilesDone < 0 THEN
+                            fileOpProgressSkipped = fileOpProgressSkipped + 1
+                        ELSE
+                            failCount = failCount + 1
+                        END IF
                     END IF
+                    FileOpProgressUpdate selectedPath, newPath, successCount, 0, failCount, fileOpProgressSkipped, 0
                 END IF
+                IF fileOpCancel <> 0 THEN EXIT DO
             LOOP
+            FileOpProgressEnd
 
-            IF successCount > 0 THEN
+            IF fileOpCancel <> 0 THEN
+                statusText = "Operation canceled"
+            ELSEIF successCount > 0 THEN
                 ClearComboItemCache
-                ConfigureFileBrowserWindow winIdx, selectedDir
+                IF fileControlName <> "" THEN
+                    ConfigureFileBrowserPane winIdx, fileControlName, dirControlName, statsControlName, selectedDir
+                ELSE
+                    ConfigureFileBrowserWindow winIdx, selectedDir
+                END IF
             END IF
 
             IF clipMode = "CUT" AND successCount > 0 AND failCount = 0 THEN
                 fileBrowserClipboardPath = ""
                 fileBrowserClipboardMode = ""
+                fileBrowserClipboardDestDir = ""
+                fileBrowserClipboardDestList = ""
+                fileBrowserClipboardDestPathControl = ""
             END IF
 
-            IF successCount = 0 THEN
+            IF fileOpCancel <> 0 THEN
+                statusText = "Operation canceled"
+            ELSEIF successCount = 0 THEN
                 IF itemCount = 1 THEN
                     IF clipMode = "CUT" THEN
                         statusText = "Move failed"
@@ -30769,7 +33867,7 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
                         statusText = "Paste failed"
                     END IF
                 ELSE
-                    statusText = "Paste failed for " + LTRIM$(STR$(failCount)) + " files"
+                    statusText = "Paste failed for " + LTRIM$(STR$(failCount)) + " items"
                 END IF
             ELSEIF itemCount = 1 THEN
                 IF clipMode = "CUT" THEN
@@ -30785,9 +33883,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
                 END IF
             ELSE
                 IF clipMode = "CUT" THEN
-                    statusText = "Moved " + LTRIM$(STR$(successCount)) + " files"
+                    statusText = "Moved " + LTRIM$(STR$(successCount)) + " items"
                 ELSE
-                    statusText = "Pasted " + LTRIM$(STR$(successCount)) + " files"
+                    statusText = "Pasted " + LTRIM$(STR$(successCount)) + " items"
                 END IF
             END IF
         END IF
@@ -30806,10 +33904,48 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         fileDragDropSourceWin = 0
         fileDragDropStatusControl = ""
 
+    CASE "FILE_BROWSER_FILE_COPY_TO_OPPOSITE"
+        fileControlName = NextActionToken(args)
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        FileBrowserCopyMoveActiveToOpposite winIdx, 0, controlName
+
+    CASE "FILE_BROWSER_FILE_MOVE_TO_OPPOSITE"
+        fileControlName = NextActionToken(args)
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        FileBrowserCopyMoveActiveToOpposite winIdx, -1, controlName
+
+    CASE "FILE_BROWSER_DIR_NEW_ACTIVE"
+        controlName = NextActionToken(args)
+        IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
+        pathControlName = FileBrowserResolvePathControlName(winIdx, "FILE_BROWSER_ACTIVE_PATH")
+        selectedDir = ""
+        IF pathControlName <> "" THEN selectedDir = AbsoluteDirPath(TRIM$(GetTextboxTextByName(pathControlName)))
+        IF selectedDir = "" THEN selectedDir = FileBrowserWindowCurrentDir(winIdx)
+
+        IF selectedDir = "" THEN
+            statusText = "New directory unavailable"
+            SetTextboxTextByName controlName, statusText
+        ELSE
+            dlgPath = AppDialogPath(winIdx, "RENAME_DIALOG", "")
+            IF dlgPath = "" OR DIR(LayoutFilePath(dlgPath)) = "" THEN
+                statusText = "New directory dialog unavailable"
+                SetTextboxTextByName controlName, statusText
+            ELSE
+                statusText = "New directory in " + selectedDir
+                SetTextboxTextByName controlName, statusText
+                SyncLayoutWindowFromGlobals activeLayoutWindow
+                ShowDirectoryCreate selectedDir, dlgPath, winIdx
+            END IF
+        END IF
+
     CASE "FILE_BROWSER_FILE_DUPLICATE"
         fileControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 0)
         IF fileControlName = "" THEN fileControlName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
         selectedName = ""
@@ -30905,7 +34041,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_FILE_RENAME"
         fileControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 2)
         IF fileControlName = "" THEN fileControlName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
         selectedName = ""
@@ -31059,7 +34197,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_FILE_DELETE"
         fileControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 2)
         IF fileControlName = "" THEN fileControlName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
         selectedName = ""
@@ -31068,7 +34208,7 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         IF clearIdx >= 1 AND clearIdx <= uiCount THEN
             IF uiElems(clearIdx).kindId = UI_KIND_LISTBOX THEN
                 selectedName = ControlValueFromListControl(clearIdx)
-                selectedList = ListSelectionFilePaths(winIdx, clearIdx, selectedName)
+                selectedList = ListSelectionBrowserPaths(winIdx, clearIdx, selectedName)
                 IF selectedList = "" THEN
                     IF LEFT$(UCASE$(selectedName), 2) = "D:" THEN
                         selectedList = AbsoluteDirPath(MID$(selectedName, 3))
@@ -31117,6 +34257,7 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
         IF itemCount < 1 THEN
             statusText = "Delete unavailable"
         ELSEIF itemCount > 1 THEN
+            FileOpProgressBegin deleteSourceWin, "DELETE"
             itemList = selectedList
             successCount = 0
             failCount = 0
@@ -31166,7 +34307,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
                 ELSE
                     failCount = failCount + 1
                 END IF
+                FileOpProgressUpdate selectedPath, "", successCount, 0, failCount, fileOpProgressSkipped, 0
             LOOP
+            FileOpProgressEnd
 
             IF successCount > 0 THEN
                 deleteFilePath = ""
@@ -31220,11 +34363,13 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
                 deleteFilesDone = 0
                 deleteDirsDone = 0
                 deleteFailsDone = 0
+                FileOpProgressBegin deleteSourceWin, "DELETE"
                 IF deletePermanentOpt <> 0 THEN
                     deletedOk = DeletePathPermanent(selectedPath, deleteRecursiveOpt, deleteFilesDone, deleteDirsDone, deleteFailsDone)
                 ELSE
                     deletedOk = TrashMovePathToTrash(selectedPath, deleteRecursiveOpt)
                 END IF
+                FileOpProgressEnd
                 IF deletedOk <> 0 THEN
                     deleteFilePath = ""
                     IF deleteFailsDone > 0 THEN
@@ -31405,7 +34550,9 @@ SUB HostAppAction(BYVAL winIdx AS INTEGER, BYVAL actIn AS STRING)
     CASE "FILE_BROWSER_FILE_PROPERTIES"
         fileControlName = NextActionToken(args)
         controlName = NextActionToken(args)
+        fileControlName = FileBrowserResolveActionControlName(winIdx, fileControlName, 2)
         IF fileControlName = "" THEN fileControlName = AppControlNameValue(winIdx, "FILE_BROWSER_FILE_CONTROL", "")
+        IF fileControlName <> "" THEN FileBrowserSetActiveListByName winIdx, fileControlName
         IF controlName = "" THEN controlName = AppControlNameValue(winIdx, "FILE_BROWSER_STATUS_CONTROL", "")
 
         selectedName = ""
@@ -37876,25 +41023,7 @@ FUNCTION LayoutAppViewHit(BYVAL mouseX AS INTEGER, BYVAL mouseY AS INTEGER) AS I
     IF activeLayoutWindow < LBOUND(layoutWindows) OR activeLayoutWindow > UBOUND(layoutWindows) THEN EXIT FUNCTION
     IF layoutWindows(activeLayoutWindow).used = 0 THEN EXIT FUNCTION
 
-    activePage = ""
-    tabNumber = 0
-    FOR i = 1 TO uiCount
-        IF uiElems(i).kindId = UI_KIND_TAB THEN
-            tabNumber = tabNumber + 1
-            IF tabNumber = uiSelectedTab THEN
-                activePage = UCASE$(uiElems(i).text)
-                EXIT FOR
-            END IF
-        END IF
-    NEXT
-    IF activePage = "" THEN
-        FOR i = 1 TO uiCount
-            IF uiElems(i).kindId = UI_KIND_TAB THEN
-                activePage = UCASE$(uiElems(i).text)
-                EXIT FOR
-            END IF
-        NEXT
-    END IF
+    GetLayoutActivePage activePage
 
     GetLayoutContentExtents contentW, contentH
     GetLayoutScrollMetricsFromContent contentW, contentH, showHScroll, showVScroll, clientW, clientH, maxScrollX, maxScrollY
@@ -38289,25 +41418,7 @@ SUB DrawOpenComboPopup(BYVAL elemIdx AS INTEGER, BYVAL contentRight AS INTEGER)
     IF uiElems(elemIdx).kindKey <> "COMBO" THEN EXIT SUB
     IF comboOpenIndex(activeLayoutWindow) <> elemIdx THEN EXIT SUB
 
-    activePage = ""
-    tabNumber = 0
-    FOR itemIdx = 1 TO uiCount
-        IF uiElems(itemIdx).kindId = UI_KIND_TAB THEN
-            tabNumber = tabNumber + 1
-            IF tabNumber = uiSelectedTab THEN
-                activePage = UCASE$(uiElems(itemIdx).text)
-                EXIT FOR
-            END IF
-        END IF
-    NEXT
-    IF activePage = "" THEN
-        FOR itemIdx = 1 TO uiCount
-            IF uiElems(itemIdx).kindId = UI_KIND_TAB THEN
-                activePage = UCASE$(uiElems(itemIdx).text)
-                EXIT FOR
-            END IF
-        NEXT
-    END IF
+    GetLayoutActivePage activePage
 
     visible = 0
     IF uiElems(elemIdx).page = "" THEN
@@ -39614,7 +42725,7 @@ FUNCTION LayoutElementIsDynamic(BYVAL elemIdx AS INTEGER) AS INTEGER
     elemStyle = uiElems(elemIdx).drawStyleKey
 
     SELECT CASE elemKind
-    CASE "TEXTBOX", "PREVIEW", "APPVIEW", "CANVAS", "OVERLAY"
+    CASE "TEXTBOX", "PREVIEW", "APPVIEW", "CANVAS", "OVERLAY", "MENUBAR"
         RETURN -1
     CASE "COMBO", "LISTBOX"
         ' Combo/list contents, scroll position, and selection are still dynamic.
@@ -39738,6 +42849,7 @@ FUNCTION LayoutElementDrawSignature(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS IN
     DIM sig AS LONG
     DIM elemKind AS STRING
     DIM srcIdx AS INTEGER
+    DIM activePage AS STRING
 
     IF winIdx < 1 OR winIdx > 12 THEN RETURN 0
     IF elemIdx < 1 OR elemIdx > uiCount THEN RETURN 0
@@ -39784,6 +42896,10 @@ FUNCTION LayoutElementDrawSignature(BYVAL winIdx AS INTEGER, BYVAL elemIdx AS IN
         ' version. Do not rehash long source strings on every cache probe.
         sig = sig + CLNG(layoutDirtyVersion(winIdx)) * 139
         sig = sig + LayoutElementTextChecksumRef(layoutListMultiSel(winIdx, elemIdx), 512) * 149
+        IF FileBrowserListIsActive(winIdx, elemIdx) <> 0 THEN
+            GetLayoutActivePage activePage
+            IF UCASE$(TRIM$(activePage)) = "DUAL" THEN sig = sig + 151
+        END IF
     CASE "COMBO"
         ' Combo source rebuilds are likewise protected by layoutDirtyVersion.
         sig = sig + CLNG(layoutDirtyVersion(winIdx)) * 167
@@ -40629,7 +43745,9 @@ SUB DrawAppLayout()
     DIM clientW AS INTEGER
     DIM maxScrollX AS INTEGER
     DIM listItemSelected AS INTEGER
+    DIM listItemHover AS INTEGER
     DIM listItemValue AS STRING
+    DIM listTextColor AS UINTEGER
     DIM listBaseText AS STRING
     DIM listItemTextUpper AS STRING
     DIM listItemValueUpper AS STRING
@@ -40670,26 +43788,7 @@ SUB DrawAppLayout()
         DrawLayoutWindowChromeCached drawLayoutWindow
     END IF
 
-    activePage = ""
-    tabNumber = 0
-
-    FOR i = 1 TO uiCount
-        IF uiElems(i).kindId = UI_KIND_TAB THEN
-            tabNumber = tabNumber + 1
-            IF tabNumber = uiSelectedTab THEN
-                activePage = UCASE$(uiElems(i).text)
-                EXIT FOR
-            END IF
-        END IF
-    NEXT
-    IF activePage = "" THEN
-        FOR i = 1 TO uiCount
-            IF uiElems(i).kindId = UI_KIND_TAB THEN
-                activePage = UCASE$(uiElems(i).text)
-                EXIT FOR
-            END IF
-        NEXT
-    END IF
+    GetLayoutActivePage activePage
 
     GetLayoutContentExtents contentW, contBottom
     GetLayoutScrollMetricsFromContent contentW, contBottom, showHScroll, showVScroll, clientW, clientHt, maxScrollX, maxScrl
@@ -40904,6 +44003,9 @@ SUB DrawAppLayout()
                         DrawStringRefClipped tx, ty, uiElems(i).text, COL_TEXT, clipL, clipT, clipR, clipB
                     END IF
 
+                CASE "MENUBAR"
+                    DrawAppMenuBarElement drawLayoutWindow, i, ex, ey, ew, eh, clipL, clipT, clipR, clipB
+
                 CASE "COMBO"
                     IF ew <= 0 THEN ew = 120
                     IF eh <= 0 THEN eh = 22
@@ -40939,9 +44041,12 @@ SUB DrawAppLayout()
                     IF ew <= 0 THEN ew = 120
                     IF eh <= 0 THEN eh = 100
                     IF RectIntersectsClip(ex, ey, ex + ew, ey + eh, clipL, clipT, clipR, clipB) <> 0 THEN
-                        Draw3DRectClipped ex, ey, ex + ew, ey + eh, 0, clipL, clipT, clipR, clipB
-                        FillRectClipped ex + 2, ey + 2, ex + ew - 2, ey + eh - 2, clipL, clipT, clipR, clipB, COL_CONTROL_BG
-
+                        IF uiElems(i).sourceKindId = UI_SOURCE_DRIVES AND uiElems(i).drawStyleId = UI_DRAW_BUTTON THEN
+                            FillRectClipped ex, ey, ex + ew, ey + eh, clipL, clipT, clipR, clipB, COL_BACKGROUND
+                        ELSE
+                            Draw3DRectClipped ex, ey, ex + ew, ey + eh, 0, clipL, clipT, clipR, clipB
+                            FillRectClipped ex + 2, ey + 2, ex + ew - 2, ey + eh - 2, clipL, clipT, clipR, clipB, COL_CONTROL_BG
+                        END IF
                         listCacheSlot = EnsureComboItemCacheSlot(i)
                         IF listCacheSlot > 0 THEN
                             itemCount = comboItemCacheCount(listCacheSlot)
@@ -40949,6 +44054,53 @@ SUB DrawAppLayout()
                             BuildComboItems i
                             itemCount = tempComboItemCount
                         END IF
+                        IF uiElems(i).sourceKindId = UI_SOURCE_DRIVES AND uiElems(i).drawStyleId = UI_DRAW_BUTTON THEN
+                            DIM driveBtnW AS INTEGER
+                            DIM driveGap AS INTEGER
+                            DIM driveIdx AS INTEGER
+                            DIM driveX AS INTEGER
+                            DIM driveY AS INTEGER
+                            DIM driveText AS STRING
+                            DIM driveValue AS STRING
+                            DIM drivePathText AS STRING
+                            DIM driveRootText AS STRING
+                            DIM drivePressed AS INTEGER
+                            DIM driveTextX AS INTEGER
+                            DIM driveTextY AS INTEGER
+                            driveBtnW = 34
+                            driveGap = 4
+                            driveY = ey + 1
+                            drivePathText = ""
+                            IF TRIM$(uiElems(i).sourceControl) <> "" THEN drivePathText = GetControlTextValue(uiElems(i).sourceControl)
+                            driveRootText = UCASE$(FileBrowserRootPath(drivePathText))
+                            FOR driveIdx = 1 TO itemCount
+                                driveX = ex + 2 + (driveIdx - 1) * (driveBtnW + driveGap)
+                                IF driveX + driveBtnW > ex + ew - 2 THEN EXIT FOR
+                                IF listCacheSlot > 0 THEN
+                                    driveText = RTRIM$(comboItemCacheItems(listCacheSlot, driveIdx))
+                                    driveValue = RTRIM$(comboItemCacheValues(listCacheSlot, driveIdx))
+                                ELSE
+                                    driveText = RTRIM$(tempComboItems(driveIdx))
+                                    driveValue = RTRIM$(tempComboValues(driveIdx))
+                                END IF
+                                drivePressed = 0
+                                IF LEFT$(UCASE$(driveValue), 2) = "V:" THEN
+                                    IF UCASE$(MID$(driveValue, 3)) = driveRootText THEN drivePressed = -1
+                                END IF
+                                DrawButtonBevelBoxClipped driveX, driveY, driveX + driveBtnW, driveY + eh - 2, drivePressed, clipL, clipT, clipR, clipB
+                                IF uiStyle.buttonStyleId = 1 THEN FillRectClipped driveX + 2, driveY + 2, driveX + driveBtnW - 2, driveY + eh - 4, clipL, clipT, clipR, clipB, uiStyle.buttonFaceCol
+                                driveTextX = driveX + ((driveBtnW - LEN(driveText) * 8) \ 2)
+                                driveTextY = driveY + ((eh - 10) \ 2)
+                                IF drivePressed <> 0 THEN
+                                    driveTextX = driveTextX + uiStyle.pressedOffset
+                                    driveTextY = driveTextY + uiStyle.pressedOffset
+                                END IF
+                                IF driveTextX < driveX + 4 THEN driveTextX = driveX + 4
+                                IF driveText <> "" THEN DrawStringRefClipped driveTextX, driveTextY, driveText, COL_TEXT, clipL, clipT, clipR, clipB
+                            NEXT
+                            GOTO LayoutListboxDone
+                        END IF
+
                         comboItemH = 16
                         listRows = (eh - 4) \ comboItemH
                         IF listRows < 1 THEN listRows = 1
@@ -40982,6 +44134,10 @@ SUB DrawAppLayout()
                             END IF
                         END IF
 
+                        IF uiElems(i).sourceKindId = UI_SOURCE_FILES OR uiElems(i).sourceKindId = UI_SOURCE_COMBINED THEN
+                            IF FileBrowserColorsEnabled(drawLayoutWindow) <> 0 THEN FileBrowserLoadExtensionColors drawLayoutWindow
+                        END IF
+
                         FOR visibleRow = 0 TO listRows - 1
                             itemIdx = topIdx + visibleRow + 1
                             IF itemIdx >= 1 AND itemIdx <= itemCount THEN
@@ -40994,10 +44150,16 @@ SUB DrawAppLayout()
                                     listItemValue = RTRIM$(tempComboValues(itemIdx))
                                 END IF
                                 listBaseText = itemText
-                                IF uiElems(i).sourceKindId = UI_SOURCE_FILES AND LEFT$(listItemValue, 2) = "F:" THEN
+                                IF (uiElems(i).sourceKindId = UI_SOURCE_FILES OR uiElems(i).sourceKindId = UI_SOURCE_COMBINED) AND LEFT$(listItemValue, 2) = "F:" THEN
                                     itemText = CachedFilePaneCaption(listItemValue, listBaseText, uiElems(i).w)
                                 END IF
                                 listItemSelected = 0
+                                listItemHover = 0
+                                IF fileBrowserDragHoverWin = drawLayoutWindow AND fileBrowserDragHoverElem = i THEN
+                                    IF fileBrowserDragHoverValue <> "" THEN
+                                        IF UCASE$(listItemValue) = UCASE$(fileBrowserDragHoverValue) THEN listItemHover = -1
+                                    END IF
+                                END IF
                                 IF listHighlightAllowed <> 0 THEN
                                     listItemValueUpper = UCASE$(listItemValue)
                                     IF LEFT$(listItemValue, 2) = "P:" THEN
@@ -41012,11 +44174,12 @@ SUB DrawAppLayout()
                                     END IF
                                 END IF
 
-                                IF listItemSelected <> 0 THEN
+                                IF listItemSelected <> 0 OR listItemHover <> 0 THEN
                                     FillRectClipped ex + 2, listRowY, comboTextRight, listRowY + comboItemH - 1, clipL, clipT, clipR, clipB, COL_SELECT
                                     IF itemText <> "" THEN DrawStringRefClipped ex + 4, listRowY + 4, itemText, COL_SELECTED_TEXT, clipL, clipT, comboTextRight - 1, clipB
                                 ELSE
-                                    IF itemText <> "" THEN DrawStringRefClipped ex + 4, listRowY + 4, itemText, COL_TEXT, clipL, clipT, comboTextRight - 1, clipB
+                                    listTextColor = FileBrowserRowTextColor(drawLayoutWindow, listItemValue)
+                                    IF itemText <> "" THEN DrawStringRefClipped ex + 4, listRowY + 4, itemText, listTextColor, clipL, clipT, comboTextRight - 1, clipB
                                 END IF
                             END IF
                         NEXT
@@ -41032,6 +44195,29 @@ SUB DrawAppLayout()
                             comboThumbBottom = comboThumbTop + comboThumbH - 1
                             Draw3DRectClipped comboScrollLeft + 1, comboThumbTop, ex + ew - 3, comboThumbBottom, 1, clipL, clipT, clipR, clipB
                         END IF
+
+                        IF FileBrowserListIsActive(drawLayoutWindow, i) <> 0 THEN
+                            DIM activePanePage AS STRING
+                            GetLayoutActivePage activePanePage
+                            IF UCASE$(TRIM$(activePanePage)) = "DUAL" THEN
+                                ' Draw a heavy active file pane frame after rows and scrollbars.
+                                DIM paneFrameCol AS UINTEGER
+                                paneFrameCol = FileBrowserActivePaneFrameColor()
+                                LineHClipped ex, ex + ew, ey, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineHClipped ex, ex + ew, ey + eh, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineVClipped ex, ey, ey + eh, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineVClipped ex + ew, ey, ey + eh, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineHClipped ex + 1, ex + ew - 1, ey + 1, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineHClipped ex + 1, ex + ew - 1, ey + eh - 1, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineVClipped ex + 1, ey + 1, ey + eh - 1, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineVClipped ex + ew - 1, ey + 1, ey + eh - 1, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineHClipped ex + 2, ex + ew - 2, ey + 2, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineHClipped ex + 2, ex + ew - 2, ey + eh - 2, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineVClipped ex + 2, ey + 2, ey + eh - 2, clipL, clipT, clipR, clipB, paneFrameCol
+                                LineVClipped ex + ew - 2, ey + 2, ey + eh - 2, clipL, clipT, clipR, clipB, paneFrameCol
+                            END IF
+                        END IF
+LayoutListboxDone:
                     END IF
 
                 CASE "SPLITTER"
@@ -41299,6 +44485,7 @@ SUB DrawAppLayout()
     END IF
 
     IF layoutDrawPass = 0 OR layoutDrawPass = 2 THEN
+        DrawOpenAppMenu drawLayoutWindow
         DrawLayoutWindowOverlays activePage, uiWinX, uiWinY, uiWinX + uiWinW, uiWinY + uiWinH
     ELSEIF layoutDrawPass = 3 OR layoutDrawPass = 4 THEN
         DrawLayoutWindowOverlays activePage, clipL, clipT, clipR, clipB
@@ -41358,6 +44545,10 @@ SUB InitLayoutWindowSlot(BYVAL idx AS INTEGER, BYVAL appPath AS STRING, BYVAL ti
     layoutKeyAction(idx) = TRIM$(AppCfgValue(appPath, "KEY_ACTION", ""))
     layoutCtrlSAction(idx) = TRIM$(AppCfgValue(appPath, "CTRL_S_ACTION", ""))
     layoutTextSaveStatusControl(idx) = TRIM$(AppCfgValue(appPath, "TEXT_SAVE_STATUS_CONTROL", ""))
+    layoutFileBrowserColorsReady(idx) = 0
+    layoutFileBrowserColorsEnabled(idx) = 0
+    layoutFileBrowserSortMode(idx) = ""
+    layoutFileBrowserMaskText(idx) = ""
     comboOpenIndex(idx) = 0
     ClearLayoutDirtyElements idx
 
@@ -42034,6 +45225,8 @@ END FUNCTION
 SUB ActivateLayoutWindow(BYVAL winIdx AS INTEGER)
     DIM i AS INTEGER
 
+    IF appMenuOpenWin <> winIdx THEN AppMenuClose
+
     IF winIdx < LBOUND(layoutWindows) OR winIdx > UBOUND(layoutWindows) THEN EXIT SUB
     IF layoutWindows(winIdx).used = 0 THEN EXIT SUB
     IF layoutWindows(winIdx).minimized <> 0 THEN
@@ -42225,6 +45418,7 @@ SUB CloseLayoutWindow(BYVAL idx AS INTEGER)
     IF layoutWindows(idx).used = 0 THEN EXIT SUB
 
     IF bdbgEnabled <> 0 THEN BDbgWindowEvent "CLOSE_BEGIN", idx
+    LayoutSavePersistentState idx
     IF bdbgEnabled <> 0 THEN BDbgWindowEvent "CLOSE_BEFORE_FREE_CACHES", idx
     FreeLayoutWindowDrawCache idx
     FreeLayoutWindowStaticCache idx
@@ -42897,6 +46091,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
         DIM layoutLoopBusy AS INTEGER
         DIM altTabDown AS INTEGER
         DIM altTabWasDown AS INTEGER
+        DIM appMenuOutsideClickClosed AS INTEGER
 
         IF resumeExistingLayout = 0 THEN
             ' The first layout window uses the same create/load/runtime-init path
@@ -42974,6 +46169,9 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
         fileDragDropValue = ""
         fileDragDropDir = ""
         fileDragDialogPath = ""
+        fileBrowserDragHoverWin = 0
+        fileBrowserDragHoverElem = 0
+        fileBrowserDragHoverValue = ""
         rightBtn = 0
         prevRightBtn = 0
         ctxMenuOpen = 0
@@ -43508,9 +46706,22 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                             END IF
 
                                             ctxWorkRow = ctxWorkRow + 1
+                                            IF TRIM$(AppCfgValue(RTRIM$(layoutWindows(activeLayoutWindow).appPath), "CONTEXT_CUT_TEXT", "")) <> "" THEN
+                                                IF ctxClickRow = ctxWorkRow THEN
+                                                    cutActionText = AppCfgValue(RTRIM$(layoutWindows(activeLayoutWindow).appPath), "CONTEXT_CUT_ACTION", "")
+                                                    IF cutActionText <> "" THEN HostAppAction activeLayoutWindow, cutActionText + " " + uiElems(ctxMenuElem).name + ctxStatusSuffix
+                                                END IF
+                                                ctxWorkRow = ctxWorkRow + 1
+                                            END IF
+
                                             IF TRIM$(AppCfgValue(RTRIM$(layoutWindows(activeLayoutWindow).appPath), "CONTEXT_COPY_TEXT", "")) <> "" THEN
                                                 IF ctxClickRow = ctxWorkRow THEN
-                                                    HostAppAction activeLayoutWindow, "FILE_BROWSER_DIR_COPY " + uiElems(ctxMenuElem).name + ctxStatusSuffix
+                                                    copyActionText = AppCfgValue(RTRIM$(layoutWindows(activeLayoutWindow).appPath), "CONTEXT_COPY_ACTION", "")
+                                                    IF copyActionText <> "" THEN
+                                                        HostAppAction activeLayoutWindow, copyActionText + " " + uiElems(ctxMenuElem).name + ctxStatusSuffix
+                                                    ELSE
+                                                        HostAppAction activeLayoutWindow, "FILE_BROWSER_DIR_COPY " + uiElems(ctxMenuElem).name + ctxStatusSuffix
+                                                    END IF
                                                 END IF
                                                 ctxWorkRow = ctxWorkRow + 1
                                             END IF
@@ -43751,25 +46962,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                     END IF
 
                     IF launchRightHandled = 0 THEN
-                    rightActivePage = ""
-                    rightTabNumber = 0
-                    FOR i = 1 TO uiCount
-                        IF uiElems(i).kindId = UI_KIND_TAB THEN
-                            rightTabNumber = rightTabNumber + 1
-                            IF rightTabNumber = uiSelectedTab THEN
-                                rightActivePage = UCASE$(uiElems(i).text)
-                                EXIT FOR
-                            END IF
-                        END IF
-                    NEXT
-                    IF rightActivePage = "" THEN
-                        FOR i = 1 TO uiCount
-                            IF uiElems(i).kindId = UI_KIND_TAB THEN
-                                rightActivePage = UCASE$(uiElems(i).text)
-                                EXIT FOR
-                            END IF
-                        NEXT
-                    END IF
+                    GetLayoutActivePage rightActivePage
 
                     rightHitIndex = 0
                     FOR i = 1 TO uiCount
@@ -43803,7 +46996,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                             rightSelIdx = comboScrollTop(activeLayoutWindow, rightHitIndex) + ((smy - (ey + 2)) \ rightItemH) + 1
                             IF rightSelIdx >= 1 AND rightSelIdx <= listItemCount THEN
                                 ctxFileValue = ComboFastItemValue(listCacheSlot, rightSelIdx)
-                                IF LEFT$(UCASE$(ctxFileValue), 2) = "F:" OR LEFT$(UCASE$(ctxFileValue), 2) = "D:" THEN
+                                IF uiElems(rightHitIndex).sourceKindId <> UI_SOURCE_DRIVES AND (LEFT$(UCASE$(ctxFileValue), 2) = "F:" OR LEFT$(UCASE$(ctxFileValue), 2) = "D:") THEN
                                     ctxMenuIsDir = 0
                                     ctxMenuEditEnabled = 0
                                     ctxMenuHasCopy = 0
@@ -43989,6 +47182,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                 DIM hitSlot AS INTEGER
                 DIM kWin AS INTEGER
 
+                appMenuOutsideClickClosed = 0
                 layoutCloseClickConsumed = 0
                 hitSlot = 0
                 taskButtonHit = 0
@@ -44521,25 +47715,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                     uiPressedIndex = 0
                 END IF
 
-                activePage = ""
-                tabNumber = 0
-                FOR i = 1 TO uiCount
-                    IF uiElems(i).kindId = UI_KIND_TAB THEN
-                        tabNumber = tabNumber + 1
-                        IF tabNumber = uiSelectedTab THEN
-                            activePage = UCASE$(uiElems(i).text)
-                            EXIT FOR
-                        END IF
-                    END IF
-                NEXT
-                IF activePage = "" THEN
-                    FOR i = 1 TO uiCount
-                        IF uiElems(i).kindId = UI_KIND_TAB THEN
-                            activePage = UCASE$(uiElems(i).text)
-                            EXIT FOR
-                        END IF
-                    NEXT
-                END IF
+                GetLayoutActivePage activePage
 
                 hitIndex = 0
                 showVScrollLoop = 0
@@ -44590,6 +47766,11 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                         EXIT FOR
                                     END IF
                                 END IF
+                            ELSEIF uiElems(i).kindId = UI_KIND_MENUBAR THEN
+                                IF AppMenuPointHitsElement(activeLayoutWindow, i, smx, smy) <> 0 THEN
+                                    hitIndex = i
+                                    EXIT FOR
+                                END IF
                             ELSEIF uiElems(i).kindId = UI_KIND_COMBO THEN
                                 IF RectIntersectsClip(ex, ey, ex + ew, ey + eh, uiWinX + 2, uiWinY + 19, contentRightLoop, LayoutVisibleClientBottom(showHScrollLoop)) <> 0 THEN
                                     IF PointInControlClip(smx, smy, ex, ey, ex + ew, ey + eh, uiWinX + 2, uiWinY + 19, contentRightLoop, LayoutVisibleClientBottom(showHScrollLoop)) <> 0 THEN
@@ -44629,6 +47810,18 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                         IF comboOpenIndex(activeLayoutWindow) <> 0 THEN
                             comboOpenIndex(activeLayoutWindow) = 0
                                             END IF
+                    END IF
+                END IF
+
+                ' App menu dropdowns are overlays. A click on any non-menu control
+                ' closes the menu before that control redraws for focus/selection.
+                IF appMenuOpenWin = activeLayoutWindow THEN
+                    IF hitIndex = 0 THEN
+                        AppMenuClose
+                        appMenuOutsideClickClosed = -1
+                    ELSEIF uiElems(hitIndex).kindId <> UI_KIND_MENUBAR THEN
+                        AppMenuClose
+                        appMenuOutsideClickClosed = -1
                     END IF
                 END IF
 
@@ -44689,7 +47882,9 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                         comboRowsLoop = (eh - 4) \ comboItemHLoop
                         IF comboRowsLoop < 1 THEN comboRowsLoop = 1
                         showComboScroll = 0
-                        IF listItemCount > comboRowsLoop THEN showComboScroll = -1
+                        IF uiElems(hitIndex).sourceKindId <> UI_SOURCE_DRIVES THEN
+                            IF listItemCount > comboRowsLoop THEN showComboScroll = -1
+                        END IF
                         IF showComboScroll <> 0 THEN
                             comboScrollLeft = ex + ew - 14
                             IF smx >= comboScrollLeft AND smx <= ex + ew - 2 AND smy >= ey + 2 AND smy <= ey + eh - 2 THEN
@@ -44732,9 +47927,12 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                 fileDragCandidateValue = ""
                 fileDragCandidateList = ""
                 fileDragActive = 0
+                fileBrowserDragHoverWin = 0
+                fileBrowserDragHoverElem = 0
+                fileBrowserDragHoverValue = ""
                 IF hitIndex > 0 THEN
                     IF uiElems(hitIndex).kindId = UI_KIND_LISTBOX THEN
-                        IF uiElems(hitIndex).sourceKindId = UI_SOURCE_FILES OR uiElems(hitIndex).sourceKindId = UI_SOURCE_DIRS THEN
+                        IF uiElems(hitIndex).sourceKindId = UI_SOURCE_FILES OR uiElems(hitIndex).sourceKindId = UI_SOURCE_DIRS OR uiElems(hitIndex).sourceKindId = UI_SOURCE_COMBINED THEN
                             fileDragCandidateValue = ActiveLayoutListBoxItemValueAtPoint(hitIndex, smx, smy)
                             IF LEFT$(UCASE$(fileDragCandidateValue), 2) = "F:" OR LEFT$(UCASE$(fileDragCandidateValue), 2) = "D:" THEN
                                 fileDragCandidateWin = activeLayoutWindow
@@ -44927,6 +48125,16 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                         activeWindowOnlyRedraw = -1
                     END IF
                 END IF
+
+                IF appMenuOutsideClickClosed <> 0 THEN
+                    dirtyElementsOnlyRedraw = 0
+                    layoutOnlyRedraw = 0
+                    activeWindowOnlyRedraw = -1
+                    oldMx = -1
+                    oldMy = -1
+                    oldHoverIdx = -1
+                    oldStartPressed = -1
+                END IF
                 END IF
             END IF
 
@@ -44967,6 +48175,29 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                             lastListClickIndex = 0
                             lastListClickItem = ""
                         END IF
+                    END IF
+                END IF
+
+                IF fileDragActive <> 0 THEN
+                    fileDragDropValue = ""
+                    navDirIdx = FileBrowserDirDropTargetAtPoint(smx, smy, fileDragDropValue)
+
+                    IF fileBrowserDragHoverWin <> activeLayoutWindow OR _
+                       fileBrowserDragHoverElem <> navDirIdx OR _
+                       fileBrowserDragHoverValue <> fileDragDropValue THEN
+                        IF fileBrowserDragHoverWin = activeLayoutWindow THEN
+                            IF fileBrowserDragHoverElem >= 1 AND fileBrowserDragHoverElem <= uiCount THEN MarkLayoutDirtyElement activeLayoutWindow, fileBrowserDragHoverElem
+                        END IF
+                        fileBrowserDragHoverWin = 0
+                        fileBrowserDragHoverElem = 0
+                        fileBrowserDragHoverValue = ""
+                        IF fileDragDropValue <> "" THEN
+                            fileBrowserDragHoverWin = activeLayoutWindow
+                            fileBrowserDragHoverElem = navDirIdx
+                            fileBrowserDragHoverValue = fileDragDropValue
+                        END IF
+                        IF navDirIdx >= 1 AND navDirIdx <= uiCount THEN MarkLayoutDirtyElement activeLayoutWindow, navDirIdx
+                        dirtyElementsOnlyRedraw = -1
                     END IF
                 END IF
 
@@ -45275,15 +48506,17 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                 END IF
 
                 IF fileDragActive <> 0 THEN
+                    IF fileBrowserDragHoverWin = activeLayoutWindow THEN
+                        IF fileBrowserDragHoverElem >= 1 AND fileBrowserDragHoverElem <= uiCount THEN MarkLayoutDirtyElement activeLayoutWindow, fileBrowserDragHoverElem
+                    END IF
+                    fileBrowserDragHoverWin = 0
+                    fileBrowserDragHoverElem = 0
+                    fileBrowserDragHoverValue = ""
                     fileDragDropValue = ""
                     fileDragDropDir = ""
-                    listDirControlName = AppControlNameValue(activeLayoutWindow, "FILE_BROWSER_DIR_CONTROL", "")
                     listStatusControlName = AppControlNameValue(activeLayoutWindow, "FILE_BROWSER_STATUS_CONTROL", "")
-                    navDirIdx = GetControlIndexByName(listDirControlName)
-                    IF navDirIdx >= 1 AND navDirIdx <= uiCount THEN
-                        fileDragDropValue = ActiveLayoutListBoxItemValueAtPoint(navDirIdx, smx, smy)
-                        IF LEFT$(UCASE$(fileDragDropValue), 2) = "D:" THEN fileDragDropDir = AbsoluteDirPath(MID$(fileDragDropValue, 3))
-                    END IF
+                    navDirIdx = FileBrowserDirDropTargetAtPoint(smx, smy, fileDragDropValue)
+                    IF LEFT$(UCASE$(fileDragDropValue), 2) = "D:" THEN fileDragDropDir = AbsoluteDirPath(MID$(fileDragDropValue, 3))
 
                     IF fileDragDropDir <> "" AND fileDragCandidateList <> "" THEN
                         fileDragDialogPath = AppDialogPath(activeLayoutWindow, "DRAGDROP_DIALOG", "")
@@ -45644,25 +48877,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                     activePage = ""
 
                 ELSE
-                    activePage = ""
-                    tabNumber = 0
-                    FOR i = 1 TO uiCount
-                        IF uiElems(i).kindId = UI_KIND_TAB THEN
-                            tabNumber = tabNumber + 1
-                            IF tabNumber = uiSelectedTab THEN
-                                activePage = UCASE$(uiElems(i).text)
-                                EXIT FOR
-                            END IF
-                        END IF
-                    NEXT
-                    IF activePage = "" THEN
-                        FOR i = 1 TO uiCount
-                            IF uiElems(i).kindId = UI_KIND_TAB THEN
-                                activePage = UCASE$(uiElems(i).text)
-                                EXIT FOR
-                            END IF
-                        NEXT
-                    END IF
+                    GetLayoutActivePage activePage
 
                     releaseIndex = 0
                     FOR i = 1 TO uiCount
@@ -45702,6 +48917,11 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                 IF uiElems(i).kindId = UI_KIND_BUTTON OR uiElems(i).kindId = UI_KIND_RADIO OR uiElems(i).kindId = UI_KIND_CHECKBOX OR _
                                uiElems(i).kindId = UI_KIND_TEXTBOX OR uiElems(i).kindId = UI_KIND_LISTBOX OR uiElems(i).kindId = UI_KIND_SPLITTER OR uiElems(i).kindId = UI_KIND_APPVIEW OR uiElems(i).kindId = UI_KIND_CANVAS THEN
                                     IF smx >= ex AND smx <= ex + ew AND smy >= ey AND smy <= ey + eh THEN
+                                        releaseIndex = i
+                                        EXIT FOR
+                                    END IF
+                                ELSEIF uiElems(i).kindId = UI_KIND_MENUBAR THEN
+                                    IF AppMenuPointHitsElement(activeLayoutWindow, i, smx, smy) <> 0 THEN
                                         releaseIndex = i
                                         EXIT FOR
                                     END IF
@@ -45979,7 +49199,8 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                             END IF
                         ELSEIF uiElems(releaseIndex).kindId = UI_KIND_LISTBOX THEN
                             listClickIsDouble = 0
-                            IF uiElems(releaseIndex).multiSelect <> 0 OR uiElems(releaseIndex).sourceKindId = UI_SOURCE_DIRS OR uiElems(releaseIndex).sourceKindId = UI_SOURCE_FILES THEN
+                            FileBrowserSetActiveListByIndex activeLayoutWindow, releaseIndex
+                            IF uiElems(releaseIndex).multiSelect <> 0 OR uiElems(releaseIndex).sourceKindId = UI_SOURCE_DIRS OR uiElems(releaseIndex).sourceKindId = UI_SOURCE_FILES OR uiElems(releaseIndex).sourceKindId = UI_SOURCE_COMBINED THEN
                                 uiFocusIndex = releaseIndex
                             ELSE
                                 uiFocusIndex = 0
@@ -45996,6 +49217,34 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                             eh = uiElems(releaseIndex).h
                             IF ew <= 0 THEN ew = 120
                             IF eh <= 0 THEN eh = 100
+
+                            IF uiElems(releaseIndex).sourceKindId = UI_SOURCE_DRIVES AND uiElems(releaseIndex).drawStyleId = UI_DRAW_BUTTON THEN
+                                DIM relDriveBtnW AS INTEGER
+                                DIM relDriveGap AS INTEGER
+                                DIM relDriveIdx AS INTEGER
+                                DIM relDriveX AS INTEGER
+                                DIM relDriveValue AS STRING
+                                DIM relDriveText AS STRING
+                                listItemCount = ComboFastItemCount(releaseIndex, listCacheSlot)
+                                relDriveBtnW = 34
+                                relDriveGap = 4
+                                IF smy >= ey + 1 AND smy <= ey + eh - 1 THEN
+                                    FOR relDriveIdx = 1 TO listItemCount
+                                        relDriveX = ex + 2 + (relDriveIdx - 1) * (relDriveBtnW + relDriveGap)
+                                        IF relDriveX + relDriveBtnW > ex + ew - 2 THEN EXIT FOR
+                                        IF smx >= relDriveX AND smx <= relDriveX + relDriveBtnW THEN
+                                            relDriveValue = ComboFastItemValue(listCacheSlot, relDriveIdx)
+                                            relDriveText = ComboFastItemText(listCacheSlot, relDriveIdx)
+                                            uiElems(releaseIndex).text = relDriveText
+                                            SyncLayoutWindowFromGlobals activeLayoutWindow
+                                            AppRuntime_HandleEvent activeLayoutWindow, "CHANGE", uiElems(releaseIndex).name, uiElems(releaseIndex).text, uiElems(releaseIndex).action
+                                            MarkLayoutDirtyElement activeLayoutWindow, releaseIndex
+                                            dirtyElementsOnlyRedraw = -1
+                                            EXIT FOR
+                                        END IF
+                                    NEXT
+                                END IF
+                            ELSE
 
                             listItemCount = ComboFastItemCount(releaseIndex, listCacheSlot)
                             comboItemHLoop = 16
@@ -46026,6 +49275,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                             ListSelectionAdd activeLayoutWindow, releaseIndex, listFastValue
                                             layoutListAnchorIdx(activeLayoutWindow, releaseIndex) = comboSelIdx
                                         END IF
+                                        FileBrowserUpdateSelectionStatus activeLayoutWindow, releaseIndex, "", (mouseDownCtrl OR mouseDownShift)
                                     END IF
                                     listClickIsDouble = 0
                                     IF lastListClickWin = activeLayoutWindow AND lastListClickIndex = releaseIndex THEN
@@ -46051,7 +49301,11 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                     IF TRIM$(uiElems(releaseIndex).bindFile) <> "" AND TRIM$(uiElems(releaseIndex).bindKey) <> "" THEN MarkWindowPresetDirty activeLayoutWindow
                                     SyncLayoutWindowFromGlobals activeLayoutWindow
                                     IF IsFileDialogDirectoryList(activeLayoutWindow, releaseIndex) = 0 THEN
-                                        AppRuntime_HandleEvent activeLayoutWindow, "CHANGE", uiElems(releaseIndex).name, uiElems(releaseIndex).text, uiElems(releaseIndex).action
+                                        IF uiElems(releaseIndex).sourceKindId = UI_SOURCE_DIRS AND uiElems(releaseIndex).multiSelect <> 0 AND (mouseDownCtrl <> 0 OR mouseDownShift <> 0) THEN
+                                            ' Ctrl/Shift directory clicks edit the selection set; Enter/double-click still navigates.
+                                        ELSE
+                                            AppRuntime_HandleEvent activeLayoutWindow, "CHANGE", uiElems(releaseIndex).name, uiElems(releaseIndex).text, uiElems(releaseIndex).action
+                                        END IF
                                     END IF
                                     IF listClickIsDouble <> 0 THEN
                                         IF activeLayoutWindow >= LBOUND(layoutWindows) AND activeLayoutWindow <= UBOUND(layoutWindows) THEN
@@ -46066,6 +49320,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                     END IF
                                 END IF
                             END IF
+                            END IF
                             SyncLayoutWindowFromGlobals activeLayoutWindow
                             IF listClickIsDouble <> 0 THEN
                                 needRedraw = -1
@@ -46079,6 +49334,27 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                             ELSE
                                 needRedraw = -1
                             END IF
+                        ELSEIF uiElems(releaseIndex).kindId = UI_KIND_MENUBAR THEN
+                            uiFocusIndex = 0
+                            IF activeLayoutWindow >= 1 AND activeLayoutWindow <= 12 THEN
+                                IF layoutWindows(activeLayoutWindow).used <> 0 THEN
+                                    layoutWindows(activeLayoutWindow).focusIndex = 0
+                                END IF
+                            END IF
+                            IF AppMenuHandleClick(activeLayoutWindow, releaseIndex, smx, smy) <> 0 THEN SoundUiEvent "MENU"
+                            IF layoutWindowCount = 0 THEN EXIT DO
+                            uiPressedIndex = 0
+                            IF activeLayoutWindow >= 1 AND activeLayoutWindow <= 12 THEN
+                                IF layoutWindows(activeLayoutWindow).used <> 0 THEN
+                                    layoutWindows(activeLayoutWindow).pressedIndex = 0
+                                    SyncLayoutWindowFromGlobals activeLayoutWindow
+                                END IF
+                            END IF
+                            needRedraw = -1
+                            oldMx = -1
+                            oldMy = -1
+                            oldHoverIdx = -1
+                            oldStartPressed = -1
                         ELSEIF uiElems(releaseIndex).kindId = UI_KIND_BUTTON THEN
                             DIM buttonActionText AS STRING
                             DIM playClickSoundAfterAction AS INTEGER
@@ -46278,7 +49554,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                     END IF
                 END IF
                 IF appKeyAction <> "" AND textboxFocusEditable = 0 THEN
-                    appKeyToken = LayoutKeyActionToken(keyIn)
+                    appKeyToken = LayoutAppKeyActionToken(activeLayoutWindow, keyIn)
                     IF appKeyToken <> "" THEN
                         keyActionText = appKeyAction + " " + appKeyToken
                         keyActiveOnlyRedraw = HostActionDirectActiveWindowRedrawOnly(keyActionText)
@@ -46755,6 +50031,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                             listValueKey = listFastValue
                                             ListSelectionClear activeLayoutWindow, uiFocusIndex
                                             IF listValueKey <> "" THEN ListSelectionAdd activeLayoutWindow, uiFocusIndex, listValueKey
+                                            FileBrowserUpdateSelectionStatus activeLayoutWindow, uiFocusIndex, "", 0
                                         END IF
 
                                         comboItemHLoop = 16
@@ -46774,7 +50051,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                                 MarkLayoutWindowVisualDirty activeLayoutWindow
                                             END IF
                                         END IF
-                                        IF listFocusKind = "FILES" THEN
+                                        IF listFocusKind = "FILES" OR listFocusKind = "COMBINED" THEN
                                             AppRuntime_HandleEvent activeLayoutWindow, "CHANGE", uiElems(uiFocusIndex).name, uiElems(uiFocusIndex).text, uiElems(uiFocusIndex).action
                                         END IF
                                         MarkLayoutDirtyElement activeLayoutWindow, uiFocusIndex
@@ -46790,6 +50067,15 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                 IF ASC(keyIn) = 13 THEN
                                     IF listFocusKind = "FILES" THEN
                                         HostAppAction activeLayoutWindow, "FILE_BROWSER_FILE_OPEN " + uiElems(uiFocusIndex).name + listStatusSuffix
+                                        needRedraw = -1
+                                        listKeyHandled = -1
+                                    ELSEIF listFocusKind = "COMBINED" THEN
+                                        listFastValue = ControlValueFromListControl(uiFocusIndex)
+                                        IF LEFT$(UCASE$(listFastValue), 2) = "D:" THEN
+                                            HostAppAction activeLayoutWindow, "FILE_BROWSER_DIR_SELECT " + uiElems(uiFocusIndex).name + " " + uiElems(uiFocusIndex).name + " " + listPathControlName
+                                        ELSE
+                                            HostAppAction activeLayoutWindow, "FILE_BROWSER_FILE_OPEN " + uiElems(uiFocusIndex).name + listStatusSuffix
+                                        END IF
                                         needRedraw = -1
                                         listKeyHandled = -1
                                     ELSEIF listFocusKind = "DIRS" THEN
@@ -46839,7 +50125,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                         HostAppAction activeLayoutWindow, "FILE_BROWSER_FILE_DELETE " + uiElems(uiFocusIndex).name + listStatusSuffix
                                         needRedraw = -1
                                     END IF
-                                ELSEIF ListSelectionFilePaths(activeLayoutWindow, uiFocusIndex, deleteKeyValue) <> "" THEN
+                                ELSEIF ListSelectionBrowserPaths(activeLayoutWindow, uiFocusIndex, deleteKeyValue) <> "" THEN
                                     deleteKeyAction = ""
                                     IF activeLayoutWindow >= LBOUND(layoutWindows) AND activeLayoutWindow <= UBOUND(layoutWindows) THEN
                                         IF layoutWindows(activeLayoutWindow).used <> 0 THEN
@@ -46854,10 +50140,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                             ELSEIF LEN(keyIn) = 1 THEN
                                 deleteKeyValue = ControlValueFromListControl(uiFocusIndex)
                                 IF ASC(keyIn) = 3 OR ((MULTIKEY(29) OR MULTIKEY(157)) AND UCASE$(keyIn) = "C") THEN
-                                    IF listFocusKind = "DIRS" THEN
-                                        HostAppAction activeLayoutWindow, "FILE_BROWSER_DIR_COPY " + uiElems(uiFocusIndex).name + listStatusSuffix
-                                        needRedraw = -1
-                                    ELSEIF ListSelectionFilePaths(activeLayoutWindow, uiFocusIndex, deleteKeyValue) <> "" THEN
+                                    IF ListSelectionBrowserPaths(activeLayoutWindow, uiFocusIndex, deleteKeyValue) <> "" THEN
                                         deleteKeyAction = ""
                                         IF activeLayoutWindow >= LBOUND(layoutWindows) AND activeLayoutWindow <= UBOUND(layoutWindows) THEN
                                             IF layoutWindows(activeLayoutWindow).used <> 0 THEN
@@ -46870,7 +50153,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                         END IF
                                     END IF
                                 ELSEIF ASC(keyIn) = 24 OR ((MULTIKEY(29) OR MULTIKEY(157)) AND UCASE$(keyIn) = "X") THEN
-                                    IF ListSelectionFilePaths(activeLayoutWindow, uiFocusIndex, deleteKeyValue) <> "" THEN
+                                    IF ListSelectionBrowserPaths(activeLayoutWindow, uiFocusIndex, deleteKeyValue) <> "" THEN
                                         deleteKeyAction = ""
                                         IF activeLayoutWindow >= LBOUND(layoutWindows) AND activeLayoutWindow <= UBOUND(layoutWindows) THEN
                                             IF layoutWindows(activeLayoutWindow).used <> 0 THEN
@@ -46898,6 +50181,7 @@ SUB ExecuteAppFile(BYVAL appPath AS STRING)
                                 ELSEIF uiElems(uiFocusIndex).multiSelect <> 0 THEN
                                     IF ASC(keyIn) = 1 OR ((MULTIKEY(29) OR MULTIKEY(157)) AND UCASE$(keyIn) = "A") THEN
                                         ListSelectionSelectAll activeLayoutWindow, uiFocusIndex
+                                        FileBrowserUpdateSelectionStatus activeLayoutWindow, uiFocusIndex, "", -1
                                         SyncLayoutWindowElementOnly activeLayoutWindow, uiFocusIndex
                                         MarkLayoutDirtyElement activeLayoutWindow, uiFocusIndex
                                         dirtyElementsOnlyRedraw = -1

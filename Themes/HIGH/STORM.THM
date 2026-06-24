@@ -1,7 +1,7 @@
 NAME=storm
 COLOR_DEPTH=16
 current_theme_%DEPTH%=F:STORM.THM
-launch_button=ICONS\LAUNCH\LNCH29.BMP
+launch_button=ICONS\LAUNCH\LAUNCH.BMP
 desktop_r=0
 desktop_g=0
 desktop_b=0
