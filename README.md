@@ -1,4 +1,4 @@
-Backlash version 1.1.0
+Backlash version 1.2.0
 ========
 
 Backlash is a 32-bit protected-mode DOS graphical shell / operating environment written in FreeBASIC.
@@ -45,7 +45,8 @@ Included app areas
 - Wallpaper (apps/wallpapr/WALLPAPR.APP) - Chooses and previews desktop wallpaper.
 - Waste Basket (apps/recycle/RECYCLE.APP) - Shows and manages deleted items in the Waste Basket.
 - Backlash Setup (BSETUP.EXE) - Command Line tool to set up Backlash
-- Association Editor (ASSOC.APP) - Simple file association editor 
+- Association Editor (ASSOC.APP) - Simple file association editor
+
 Design notes
 ------------
 - All files written in FreeBASIC 1.10.1
@@ -58,6 +59,7 @@ Design notes
 
 DISCLAIMER
 ----------
+
 Backlash is provided as-is. Use it at your own risk.
 I am not responsible for data loss, system crashes, damaged files, damaged hardware, lost time, lost work, or any other problems caused by installing, running, modifying, or using Backlash.
 Make backups before testing or changing anything.
