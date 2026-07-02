@@ -1,0 +1,150 @@
+Backlash Keyboard Shortcuts
+TEXTBOXES AND TEXT EDITOR
+
+Typing
+- Printable keys: insert the typed character at the caret.
+- Enter: insert a new line in multiline textboxes.
+- Tab: insert spaces in multiline textboxes when the active control allows it.
+- Insert: toggle insert/overwrite mode.
+
+Caret movement
+- Left: move the caret left one character.
+- Right: move the caret right one character.
+- Up: move the caret up one visible line.
+- Down: move the caret down one visible line.
+- Page Up: move the caret up one page.
+- Page Down: move the caret down one page.
+- Home: move the caret to the beginning of the current line.
+- End: move the caret to the end of the current line.
+- Ctrl+Home: move the caret to the beginning of the text.
+- Ctrl+End: move the caret to the end of the text.
+- Ctrl+Left: move the caret to the previous word.
+- Ctrl+Right: move the caret to the next word.
+
+Selection
+- Shift+Left: extend the selection left one character.
+- Shift+Right: extend the selection right one character.
+- Shift+Up: extend the selection up one line.
+- Shift+Down: extend the selection down one line.
+- Shift+Page Up: extend the selection up one page.
+- Shift+Page Down: extend the selection down one page.
+- Shift+Home: extend the selection to the beginning of the current line.
+- Shift+End: extend the selection to the end of the current line.
+- Ctrl+Shift+Home: extend the selection to the beginning of the text.
+- Ctrl+Shift+End: extend the selection to the end of the text.
+- Ctrl+Shift+Left: extend the selection to the previous word.
+- Ctrl+Shift+Right: extend the selection to the next word.
+
+Editing
+- Backspace: delete the selected text, or delete the character before the caret.
+- Delete: delete the selected text, or delete the character after the caret.
+- Ctrl+Delete: delete the selected text, or delete the next word.
+- Ctrl+A: select all text.
+- Ctrl+C: copy selected text.
+- Ctrl+X: cut selected text.
+- Ctrl+V: paste clipboard text.
+- Ctrl+Z: undo.
+- Ctrl+F: open Find when the active app defines a Find action.
+- Ctrl+S: save when the active app defines a Save action.
+
+Mouse selection
+- Single-click: place the caret and clear the current selection.
+- Shift+Click: select from the current caret position to the clicked position.
+- Drag: select the dragged text range.
+- Double-click: select the clicked word.
+- Triple-click: select the clicked line.
+
+LISTBOXES AND FILE BROWSERS
+
+Navigation
+- Up: move the selected row up.
+- Down: move the selected row down.
+- Page Up: move up one page when supported by the active list.
+- Page Down: move down one page when supported by the active list.
+- Home: move to the first item when supported by the active list.
+- End: move to the last item when supported by the active list.
+- Tab: move focus between panes in Navigator-style file browsers.
+
+File and directory actions
+- Enter on a file list: open the selected file.
+- Enter on a directory list: enter or select the selected directory.
+- Delete: delete the selected item when the active app defines a delete action.
+- Ctrl+C: copy selected file(s) or the selected directory, depending on the focused pane.
+- Ctrl+X: cut selected file(s), when supported by the active app.
+- Ctrl+V: paste copied or cut file(s), when supported by the active app.
+- Ctrl+A: select all items in a multiselect file list.
+
+Multiselect lists
+- Ctrl+Click: toggle the clicked item.
+- Shift+Click: select a range from the anchor item to the clicked item.
+
+DESKTOP AND WINDOW CONTROLS
+
+Desktop
+- Double-click an icon: open the linked app, file, program, or directory.
+- Right-click the desktop: open desktop options.
+- Right-click a desktop icon: open icon options when available.
+
+Windows
+- Click a title bar: activate the window.
+- Drag a title bar: move the window.
+- Drag a resize handle: resize the window when the window allows resizing.
+- Click Minimize: minimize the window.
+- Click Close: close the window.
+- Mouse wheel over a scrollable control: scroll that control.
+- Drag a scrollbar thumb: scroll the matching list, text area, or window content.
+
+GENERIC APP KEY ACTIONS
+
+These keys are routed to the active app only when the app defines matching key actions and no editable textbox is taking the key.
+
+- Space: SPACE
+- Ctrl+Space: CTRL_SPACE
+- 0 through 9: matching number token
+- Enter: EQUALS
+- =: EQUALS
+- Backspace: BACK
+- Escape: CLEAR
+- Delete: CLEAR
+- .: DOT
+- +: PLUS
+- -: MINUS
+- *: STAR
+- /: SLASH
+- (: LPAREN
+- ): RPAREN
+- C: CLEAR
+- S: SIN
+- T: TAN
+- L: LOG
+- Q: SQRT
+
+CALCULATOR
+
+- 0 through 9: append digit.
+- .: append decimal point.
+- +: append plus operator.
+- -: append minus operator.
+- *: append multiply operator.
+- /: append divide operator.
+- (: append left parenthesis.
+- ): append right parenthesis.
+- Backspace: delete one display character.
+- Escape, Delete, or C: clear display.
+- Enter or =: evaluate the display.
+- S: apply SIN.
+- T: apply TAN.
+- L: apply LOG.
+- Q: apply SQRT.
+
+IMAGE VIEWER
+
+- Space: load the next image in the current folder.
+- Ctrl+Space: load the previous image in the current folder.
+
+COMMON APP SHORTCUTS
+
+- Ctrl+S: save in apps that define a save action.
+- Ctrl+F: find in apps that define a find action.
+- Delete: delete the selected item in apps that define a delete action.
+- Enter: open, choose, or run the selected item when the active control defines an Enter action.

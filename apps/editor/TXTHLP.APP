@@ -1,0 +1,291 @@
+title=Text Editor Help
+ui=LAYOUT
+single_instance=1
+resizable=0
+NO_SCROLLBARS=1
+PAGE_1=OVERVIEW
+PAGE_2=FILE
+PAGE_3=TYPING
+PAGE_4=SEARCH
+PAGE_5=KEYS
+
+[WINDOW]
+X=60
+Y=40
+W=640
+H=460
+
+[LABEL]
+TEXT=Text Editor Help
+X=16
+Y=14
+
+[BUTTON]
+TEXT=Overview
+X=16
+Y=42
+W=96
+H=24
+ACTION=LAYOUT_SELECT_PAGE OVERVIEW
+
+[BUTTON]
+TEXT=File
+X=120
+Y=42
+W=96
+H=24
+ACTION=LAYOUT_SELECT_PAGE FILE
+
+[BUTTON]
+TEXT=Typing
+X=224
+Y=42
+W=96
+H=24
+ACTION=LAYOUT_SELECT_PAGE TYPING
+
+[BUTTON]
+TEXT=Search
+X=328
+Y=42
+W=96
+H=24
+ACTION=LAYOUT_SELECT_PAGE SEARCH
+
+[BUTTON]
+TEXT=Keys
+X=432
+Y=42
+W=96
+H=24
+ACTION=LAYOUT_SELECT_PAGE KEYS
+
+[LABEL]
+TEXT=Overview
+X=24
+Y=84
+PAGE=OVERVIEW
+
+[LABEL]
+TEXT=Create and edit text files.
+X=40
+Y=110
+PAGE=OVERVIEW
+
+[LABEL]
+TEXT=Open, save, search, and replace text.
+X=40
+Y=130
+PAGE=OVERVIEW
+
+[LABEL]
+TEXT=File
+X=24
+Y=84
+PAGE=FILE
+
+[LABEL]
+TEXT=New: Start a new file.
+X=40
+Y=110
+PAGE=FILE
+
+[LABEL]
+TEXT=Open: Open a file.
+X=40
+Y=130
+PAGE=FILE
+
+[LABEL]
+TEXT=Save: Save the file.
+X=40
+Y=150
+PAGE=FILE
+
+[LABEL]
+TEXT=Close: Close Text Editor.
+X=40
+Y=170
+PAGE=FILE
+
+[LABEL]
+TEXT=Ctrl+S: Save.
+X=40
+Y=190
+PAGE=FILE
+
+[LABEL]
+TEXT=Typing
+X=24
+Y=84
+PAGE=TYPING
+
+[LABEL]
+TEXT=Enter: New line.
+X=40
+Y=110
+PAGE=TYPING
+
+[LABEL]
+TEXT=Tab: Insert spaces.
+X=40
+Y=130
+PAGE=TYPING
+
+[LABEL]
+TEXT=Insert: Insert mode.
+X=40
+Y=150
+PAGE=TYPING
+
+[LABEL]
+TEXT=Backspace: Delete left.
+X=40
+Y=170
+PAGE=TYPING
+
+[LABEL]
+TEXT=Delete: Delete right.
+X=40
+Y=190
+PAGE=TYPING
+
+[LABEL]
+TEXT=Ctrl+W: Word wrap.
+X=40
+Y=210
+PAGE=TYPING
+
+[LABEL]
+TEXT=Search
+X=24
+Y=84
+PAGE=SEARCH
+
+[LABEL]
+TEXT=Find / Replace: Open search.
+X=40
+Y=110
+PAGE=SEARCH
+
+[LABEL]
+TEXT=Ctrl+F: Find / Replace.
+X=40
+Y=130
+PAGE=SEARCH
+
+[LABEL]
+TEXT=Find Next: Next match.
+X=40
+Y=150
+PAGE=SEARCH
+
+[LABEL]
+TEXT=Find Previous: Previous match.
+X=40
+Y=170
+PAGE=SEARCH
+
+[LABEL]
+TEXT=Replace: Replace one match.
+X=40
+Y=190
+PAGE=SEARCH
+
+[LABEL]
+TEXT=Replace All: Replace all matches.
+X=40
+Y=210
+PAGE=SEARCH
+
+[LABEL]
+TEXT=Case Sensitive: Match case.
+X=40
+Y=230
+PAGE=SEARCH
+
+[LABEL]
+TEXT=Keys
+X=24
+Y=84
+PAGE=KEYS
+
+[LABEL]
+TEXT=Ctrl+A: Select all.
+X=40
+Y=110
+PAGE=KEYS
+
+[LABEL]
+TEXT=Ctrl+C: Copy.
+X=40
+Y=130
+PAGE=KEYS
+
+[LABEL]
+TEXT=Ctrl+X: Cut.
+X=40
+Y=150
+PAGE=KEYS
+
+[LABEL]
+TEXT=Ctrl+V: Paste.
+X=40
+Y=170
+PAGE=KEYS
+
+[LABEL]
+TEXT=Ctrl+Z: Undo.
+X=40
+Y=190
+PAGE=KEYS
+
+[LABEL]
+TEXT=Arrows: Move caret.
+X=40
+Y=210
+PAGE=KEYS
+
+[LABEL]
+TEXT=Shift+Arrows: Select text.
+X=40
+Y=230
+PAGE=KEYS
+
+[LABEL]
+TEXT=Ctrl+Left/Right: Move by word.
+X=40
+Y=250
+PAGE=KEYS
+
+[LABEL]
+TEXT=Home/End: Line start/end.
+X=40
+Y=270
+PAGE=KEYS
+
+[LABEL]
+TEXT=Ctrl+Home/End: File start/end.
+X=40
+Y=290
+PAGE=KEYS
+
+[LABEL]
+TEXT=Page Up/Down: Move one page.
+X=40
+Y=310
+PAGE=KEYS
+
+[LABEL]
+TEXT=Ctrl+Delete: Delete next word.
+X=40
+Y=330
+PAGE=KEYS
+
+[BUTTON]
+TEXT=Close
+X=552
+Y=396
+W=64
+H=24
+ACTION=CLOSE_WINDOW

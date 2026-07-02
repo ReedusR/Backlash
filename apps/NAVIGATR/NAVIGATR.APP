@@ -169,15 +169,6 @@ H=20
 GROW_W=1
 
 
-[BUTTON]
-NAME=HELP_BUTTON
-TEXT=Help
-X=622
-Y=1
-W=50
-H=18
-GROW_W=0
-ACTION=LAUNCH_APP NAVHELP.APP
 
 [LABEL]
 TEXT=Path
@@ -236,7 +227,7 @@ PAGE=Split
 
 [LABEL]
 NAME=FILE_LABEL
-TEXT=Name              Size  Date        Attr
+TEXT=Name          Size      Date        Attr
 X=216
 Y=76
 PAGE=Split

@@ -1,6 +1,9 @@
+<<<<<<< Updated upstream
 Backlash version 1.2.0
 ========
 
+=======
+>>>>>>> Stashed changes
 Backlash is a 32-bit protected-mode DOS graphical shell / operating environment written in FreeBASIC.
 It provides windows, menus, desktop icons, launch shortcuts, file browsing, theming, wallpaper, sound settings, screensavers, and app-hosted tools.
 Backlash apps are kept outside the shell where possible. Each app normally uses an .APP layout file, a .SYS action file, and optional helper EXE/source files.
@@ -20,7 +23,9 @@ Hope you enjoy!
 SEE ALSO:
 
 LICENSE.TXT - You know what this is
+
 BACKPROG.TXT - Backlash app writing cheat sheet
+
 KEYS.TXT - App-specific and programmable keyboard shortcuts
 
 Included app areas
@@ -55,7 +60,7 @@ Design notes
 - App behavior is normally stored in app-owned .APP/.SYS/helper files.
 - The shell provides generic window, drawing, desktop, taskbar, theme, file, and host services.
 - App-specific behavior is kept out of shell/runtime files. 
-- Keep filenames DOS 8.3 compatible unless a specific exception is approved.
+- Filenames are DOS 8.3 compatible.
 
 DISCLAIMER
 ----------
