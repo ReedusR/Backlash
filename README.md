@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 Backlash version 1.2.0
 ========
 
